@@ -1,9 +1,9 @@
 import Foundation
-import EventKit
+@preconcurrency import EventKit
 
 /// Native macOS Calendar access via EventKit.
 /// No API, no bridge — reads directly from the system calendar store.
-public struct CalendarTool: Tool {
+public struct CalendarTool: Tool, @unchecked Sendable {
     private let store = EKEventStore()
 
     public init() {}

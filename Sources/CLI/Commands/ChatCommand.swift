@@ -88,7 +88,7 @@ struct Chat: AsyncParsableCommand {
         if !message.isEmpty {
             let input = message.joined(separator: " ")
             let spinner = Spinner()
-            var hasText = false
+            nonisolated(unsafe) var hasText = false
             spinner.start()
             _ = try await agent.run(input: input, onText: { text in
                 if !hasText { spinner.stop() }
@@ -206,7 +206,7 @@ struct Chat: AsyncParsableCommand {
             print("\(userBar)\n")
 
             let spinner = Spinner()
-            var hasText = false
+            nonisolated(unsafe) var hasText = false
             spinner.start()
 
             do {

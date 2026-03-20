@@ -273,7 +273,7 @@ public final class MCPManager: @unchecked Sendable {
 
 // MARK: - Types
 
-public struct MCPToolInfo: Sendable {
+public struct MCPToolInfo: @unchecked Sendable {
     public let name: String
     public let description: String
     public let inputSchema: [String: Any]

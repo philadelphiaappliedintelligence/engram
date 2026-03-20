@@ -21,10 +21,9 @@ public final class Spinner: @unchecked Sendable {
             guard let self else { return }
             var i = 0
             while true {
-                self.lock.lock()
-                let spinning = self.isSpinning
-                let msg = self.message
-                self.lock.unlock()
+                let (spinning, msg) = self.lock.withLock {
+                    (self.isSpinning, self.message)
+                }
                 guard spinning else { break }
 
                 let frame = self.frames[i % self.frames.count]
@@ -39,9 +38,7 @@ public final class Spinner: @unchecked Sendable {
 
     /// Update the spinner message without stopping/restarting.
     public func update(_ message: String) {
-        lock.lock()
-        self.message = message
-        lock.unlock()
+        lock.withLock { self.message = message }
     }
 
     public func stop() {

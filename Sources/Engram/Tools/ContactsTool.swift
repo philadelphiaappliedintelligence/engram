@@ -1,9 +1,9 @@
 import Foundation
-import Contacts
+@preconcurrency import Contacts
 
 /// Native macOS Contacts access via Contacts.framework.
 /// "What's Leo's email?" answered from the system contact store.
-public struct ContactsTool: Tool {
+public struct ContactsTool: Tool, @unchecked Sendable {
     private let store = CNContactStore()
 
     public init() {}

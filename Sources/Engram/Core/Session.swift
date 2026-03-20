@@ -231,62 +231,59 @@ public final class SessionManager: @unchecked Sendable {
 
     public func compact(keepFirst: Int = 2, keepLast: Int = 4,
                         summarizer: (String) async throws -> String) async throws {
-        lock.lock()
-        let count = entries.count
-        lock.unlock()
+        let (count, middleEntries, middleStart, middleEnd) = lock.withLock { () -> (Int, [SessionEntry], Int, Int) in
+            let c = entries.count
+            guard c > keepFirst + keepLast + 2 else { return (c, [], 0, 0) }
+            let ms = keepFirst
+            let me = c - keepLast
+            return (c, Array(entries[ms..<me]), ms, me)
+        }
 
         guard count > keepFirst + keepLast + 2 else { return }
-
-        lock.lock()
-        let middleStart = keepFirst
-        let middleEnd = count - keepLast
-        let middleEntries = Array(entries[middleStart..<middleEnd])
-        lock.unlock()
 
         let text = middleEntries.map { "[\($0.role)] \($0.content)" }.joined(separator: "\n")
         let summary = try await summarizer(text)
 
-        lock.lock()
-        let summaryEntry = SessionEntry(
-            id: shortId(),
-            parentId: entries[middleStart - 1].id,
-            timestamp: Date(),
-            role: "user",
-            content: "[Conversation summary: \(summary)]",
-            toolCalls: nil,
-            tokenUsage: nil
-        )
-
-        var newEntries = Array(entries[0..<middleStart])
-        newEntries.append(summaryEntry)
-        var lastId = summaryEntry.id
-        for i in middleEnd..<count {
-            let old = entries[i]
-            let fixed = SessionEntry(
-                id: old.id,
-                parentId: lastId,
-                timestamp: old.timestamp,
-                role: old.role,
-                content: old.content,
-                toolCalls: old.toolCalls,
-                tokenUsage: old.tokenUsage
+        lock.withLock {
+            let summaryEntry = SessionEntry(
+                id: shortId(),
+                parentId: entries[middleStart - 1].id,
+                timestamp: Date(),
+                role: "user",
+                content: "[Conversation summary: \(summary)]",
+                toolCalls: nil,
+                tokenUsage: nil
             )
-            newEntries.append(fixed)
-            lastId = old.id
-        }
 
-        entries = newEntries
+            var newEntries = Array(entries[0..<middleStart])
+            newEntries.append(summaryEntry)
+            var lastId = summaryEntry.id
+            for i in middleEnd..<count {
+                let old = entries[i]
+                let fixed = SessionEntry(
+                    id: old.id,
+                    parentId: lastId,
+                    timestamp: old.timestamp,
+                    role: old.role,
+                    content: old.content,
+                    toolCalls: old.toolCalls,
+                    tokenUsage: old.tokenUsage
+                )
+                newEntries.append(fixed)
+                lastId = old.id
+            }
 
-        // For file-based sessions, rewrite the file
-        if store == nil {
-            fileHandle?.closeFile()
-            if let file = currentFile {
-                try? rewriteFile(file, entries: entries)
-                fileHandle = FileHandle(forWritingAtPath: file.path)
-                fileHandle?.seekToEndOfFile()
+            entries = newEntries
+
+            if store == nil {
+                fileHandle?.closeFile()
+                if let file = currentFile {
+                    try? rewriteFile(file, entries: entries)
+                    fileHandle = FileHandle(forWritingAtPath: file.path)
+                    fileHandle?.seekToEndOfFile()
+                }
             }
         }
-        lock.unlock()
     }
 
     // MARK: - Private
