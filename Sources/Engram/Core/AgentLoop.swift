@@ -18,6 +18,7 @@ public actor AgentLoop {
     private var totalCacheRead = 0
     private var totalCacheWrite = 0
     private var agentsContext: String
+    private var cachedSystemPrompt: String?
 
     private let store: EngramStore?
 
@@ -152,13 +153,18 @@ public actor AgentLoop {
     }
 
     private func buildSystemPrompt() -> String {
+        if let cached = cachedSystemPrompt { return cached }
+        let prompt: String
         if needsPreambleHack {
-            return "You are Claude Code, Anthropic's official CLI for Claude."
+            prompt = "You are Claude Code, Anthropic's official CLI for Claude."
+        } else {
+            prompt = ContextBuilder.buildContextBlock(
+                shelf: shelf, skillLoader: skillLoader,
+                agentsContext: agentsContext, platformHint: platformHint
+            )
         }
-        return ContextBuilder.buildContextBlock(
-            shelf: shelf, skillLoader: skillLoader,
-            agentsContext: agentsContext, platformHint: platformHint
-        )
+        cachedSystemPrompt = prompt
+        return prompt
     }
 
     // MARK: - Context Compaction

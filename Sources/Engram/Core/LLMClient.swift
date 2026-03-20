@@ -398,18 +398,12 @@ public actor LLMClient {
         ]
         if stream { body["stream"] = true }
 
-        // System prompt
+        // System prompt with cache_control for prompt caching
         if let system {
-            if isOAuth {
-                // OAuth tokens: plain system prompt (cache_control may not be supported)
-                body["system"] = system
-            } else {
-                // API key: use cache_control for prompt caching
-                body["system"] = [
-                    ["type": "text", "text": system,
-                     "cache_control": ["type": "ephemeral"]] as [String: Any]
-                ]
-            }
+            body["system"] = [
+                ["type": "text", "text": system,
+                 "cache_control": ["type": "ephemeral"]] as [String: Any]
+            ]
         }
 
         if !tools.isEmpty {
