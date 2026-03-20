@@ -18,7 +18,13 @@ Engram remembers things the way brains do — not in a database, not in a vector
 ## Install
 
 ```sh
-git clone https://github.com/anthropics/engram.git
+curl -fsSL https://raw.githubusercontent.com/philadelphiaappliedintelligence/engram/main/install.sh | sh
+```
+
+Or build manually:
+
+```sh
+git clone https://github.com/philadelphiaappliedintelligence/engram.git
 cd engram
 swift build -c release
 cp .build/release/engram /usr/local/bin/
