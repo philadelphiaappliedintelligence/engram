@@ -15,6 +15,11 @@ public final class SessionSearchIndex: @unchecked Sendable {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.indexURL = dir.appendingPathComponent("search.skindex")
 
+        // SearchKit crashes when SIP is disabled on macOS — skip entirely
+        if checkSIPStatus() == .disabled {
+            return
+        }
+
         // Try to open existing index, or create a new one
         if FileManager.default.fileExists(atPath: indexURL.path) {
             if let ref = SKIndexOpenWithURL(indexURL as CFURL, nil, true) {
