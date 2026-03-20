@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Engram — Build from source installer
+# Engram — One-line installer
 # curl -fsSL https://raw.githubusercontent.com/philadelphiaappliedintelligence/engram/main/install.sh | sh
 
 set -e
@@ -12,7 +12,9 @@ RED='\033[31m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
+REPO="https://github.com/philadelphiaappliedintelligence/engram.git"
 INSTALL_DIR="$HOME/bin"
+BUILD_DIR="$HOME/.engram-build"
 
 clear
 printf "\n"
@@ -30,47 +32,35 @@ fi
 # SwiftData macros and SearchKit need the full Xcode toolchain
 XCODE_PATH=$(xcode-select -p 2>/dev/null || echo "")
 
-if [ -z "$XCODE_PATH" ]; then
-    printf "${RED}  Xcode is not installed.${RESET}\n\n"
-    printf "  Engram uses SwiftData and SearchKit which require the full Xcode toolchain.\n"
-    printf "  Command Line Tools alone are not sufficient.\n\n"
-    printf "  Install Xcode from the App Store:\n"
-    printf "  ${CYAN}  open \"https://apps.apple.com/app/xcode/id497799835\"${RESET}\n\n"
-    printf "  Or download directly from:\n"
-    printf "  ${CYAN}  https://developer.apple.com/download/applications/${RESET}\n\n"
-    printf "  After installing, run:\n"
-    printf "  ${CYAN}  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
-    printf "  ${CYAN}  sudo xcodebuild -license accept${RESET}\n\n"
-    printf "  Then re-run this installer.\n\n"
-    exit 1
-fi
+if [ -z "$XCODE_PATH" ] || [[ "$XCODE_PATH" == */CommandLineTools* ]]; then
+    printf "${YELLOW}  Xcode.app required${RESET}\n\n"
 
-if [[ "$XCODE_PATH" == */CommandLineTools* ]]; then
-    printf "${YELLOW}  ⚠ Xcode.app required${RESET}\n\n"
-    printf "  Your system is using Command Line Tools:\n"
-    printf "  ${DIM}  $XCODE_PATH${RESET}\n\n"
+    if [[ "$XCODE_PATH" == */CommandLineTools* ]]; then
+        printf "  Your system is using Command Line Tools:\n"
+        printf "  ${DIM}  $XCODE_PATH${RESET}\n\n"
+    fi
+
     printf "  Engram uses SwiftData and SearchKit which require the full Xcode toolchain.\n\n"
 
     if [ -d "/Applications/Xcode.app" ]; then
-        printf "  Xcode.app is installed but not selected. Fix with:\n"
+        printf "  Xcode.app is installed but not selected. Run:\n\n"
         printf "  ${CYAN}  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
         printf "  ${CYAN}  sudo xcodebuild -license accept${RESET}\n\n"
-        printf "  Then re-run this installer.\n\n"
     else
-        printf "  Install Xcode:\n\n"
         printf "  ${BOLD}Option 1:${RESET} App Store\n"
         printf "  ${CYAN}  open \"https://apps.apple.com/app/xcode/id497799835\"${RESET}\n\n"
         printf "  ${BOLD}Option 2:${RESET} Download .xip from Apple Developer\n"
         printf "  ${CYAN}  https://developer.apple.com/download/applications/${RESET}\n"
-        printf "  Then: ${DIM}xip -x Xcode*.xip && mv Xcode.app /Applications/${RESET}\n\n"
-        printf "  ${BOLD}Option 3:${RESET} Download on another Mac and transfer\n"
-        printf "  ${DIM}  scp ~/Downloads/Xcode*.xip user@this-mac:~/                ${RESET}\n"
-        printf "  ${DIM}  ssh user@this-mac 'xip -x ~/Xcode*.xip && mv ~/Xcode.app /Applications/'${RESET}\n\n"
-        printf "  After installing, run:\n"
+        printf "  ${DIM}  xip -x Xcode*.xip && mv Xcode.app /Applications/${RESET}\n\n"
+        printf "  ${BOLD}Option 3:${RESET} Transfer from another Mac\n"
+        printf "  ${DIM}  scp ~/Downloads/Xcode*.xip user@this-mac:~/${RESET}\n"
+        printf "  ${DIM}  xip -x ~/Xcode*.xip && mv ~/Xcode.app /Applications/${RESET}\n\n"
+        printf "  Then run:\n\n"
         printf "  ${CYAN}  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
         printf "  ${CYAN}  sudo xcodebuild -license accept${RESET}\n\n"
-        printf "  Then re-run this installer.\n\n"
     fi
+
+    printf "  Re-run this installer after.\n\n"
     exit 1
 fi
 
@@ -82,10 +72,19 @@ fi
 printf "${DIM}  macOS $(sw_vers -productVersion) • $(uname -m) • Swift $(swift --version 2>&1 | head -1 | sed 's/.*version //' | sed 's/ .*//')${RESET}\n"
 printf "${DIM}  Xcode: $XCODE_PATH${RESET}\n"
 printf "${DIM}  Install to: $INSTALL_DIR/engram${RESET}\n\n"
-printf "  Press ${BOLD}Enter${RESET} to build and install. "
-read -r
 
-printf "\n${CYAN}  Building release...${RESET}\n"
+# Clone or update
+if [ -d "$BUILD_DIR/.git" ]; then
+    printf "${CYAN}  Updating source...${RESET}\n"
+    git -C "$BUILD_DIR" pull --ff-only --quiet
+else
+    printf "${CYAN}  Cloning source...${RESET}\n"
+    rm -rf "$BUILD_DIR"
+    git clone --quiet "$REPO" "$BUILD_DIR"
+fi
+
+printf "${CYAN}  Building release...${RESET}\n"
+cd "$BUILD_DIR"
 swift build -c release --quiet
 
 mkdir -p "$INSTALL_DIR"
@@ -102,7 +101,7 @@ fi
 
 "$INSTALL_DIR/engram" memory > /dev/null 2>&1 || true
 
-printf "\n${GREEN}  ✓ Installed${RESET}\n\n"
+printf "\n${GREEN}  Installed${RESET}\n\n"
 printf "  ${CYAN}engram login${RESET}    Authenticate\n"
 printf "  ${CYAN}engram${RESET}          Start chatting\n"
 printf "  ${CYAN}engram --help${RESET}   All commands\n\n"
