@@ -67,6 +67,14 @@ if csrutil status 2>&1 | grep -q "disabled"; then
     cp .build/release/engram-imcore-helper.dylib "$HOME/.engram/engram-imcore-helper.dylib" 2>/dev/null || true
 fi
 
+# Ensure /usr/local/bin is in PATH
+if ! echo "$PATH" | grep -q "/usr/local/bin"; then
+    RC="$HOME/.zshrc"
+    [ ! -f "$RC" ] && RC="$HOME/.zprofile"
+    printf '\nexport PATH="/usr/local/bin:$PATH"\n' >> "$RC"
+    export PATH="/usr/local/bin:$PATH"
+fi
+
 printf "\n${GREEN}  Installed${RESET}\n\n"
 printf "  ${CYAN}engram login${RESET}    Authenticate\n"
 printf "  ${CYAN}engram${RESET}          Start chatting\n"
