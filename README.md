@@ -2,7 +2,7 @@
 
 A native macOS AI agent with holographic memory. Written in Swift.
 
-Engram remembers things the way brains do — not in a database, not in a vector store, but in superposed complex vectors that encode facts as interference patterns. Recall is algebraic and sub-millisecond. No embeddings API. No retrieval pipeline. Just math.
+Engram remembers things the way brains do: not in a database or vector store, but in superposed complex vectors that encode facts as interference patterns. Recall is algebraic and sub-millisecond. 
 
 ---
 
