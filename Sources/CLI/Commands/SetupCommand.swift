@@ -49,8 +49,12 @@ struct Memory: AsyncParsableCommand {
 
     func run() async throws {
         let config = AgentConfig.load()
-        let shelf = Shelf(saveDir: config.memoryURL)
+        let container = try EngramStore.makeContainer()
+        let store = EngramStore(modelContainer: container)
+        let shelf = Shelf(saveDir: config.memoryURL, store: store)
         shelf.loadAll()
+        // Give async store load a moment to complete
+        try? await Task.sleep(nanoseconds: 100_000_000)
         let statuses = shelf.status()
         if statuses.isEmpty { print("Memory is empty."); return }
 
@@ -71,7 +75,9 @@ struct Sessions: AsyncParsableCommand {
 
     func run() async throws {
         let config = AgentConfig.load()
-        let sessions = SessionManager(sessionDir: config.sessionURL).listSessions()
+        let container = try EngramStore.makeContainer()
+        let store = EngramStore(modelContainer: container)
+        let sessions = SessionManager(sessionDir: config.sessionURL, store: store).listSessions()
         if sessions.isEmpty { print("No saved sessions."); return }
         print("\(bold("Sessions")) (\(sessions.count))\n")
         for (i, s) in sessions.enumerated() {
