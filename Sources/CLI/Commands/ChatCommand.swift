@@ -181,12 +181,12 @@ struct Chat: AsyncParsableCommand {
 
             // ─── Chat message ───
 
-            // Clear input line and print user message in chat region
+            // Clear input and show user message in chat
             term.clearInput()
             term.moveToChatEnd()
-            print()  // blank line before user message
-            let userBar = "\u{001B}[48;5;236m \(trimmed)\(String(repeating: " ", count: max(0, term.width - trimmed.count - 1)))\u{001B}[0m"
-            print(userBar)
+            let w = term.width
+            let userBar = "\u{001B}[48;5;236m \(trimmed)\(String(repeating: " ", count: max(0, w - trimmed.count - 1)))\u{001B}[0m"
+            print("\(userBar)\n")
 
             let spinner = Spinner()
             var hasText = false
@@ -202,7 +202,7 @@ struct Chat: AsyncParsableCommand {
                     if !hasText { spinner.update(name) }
                 })
                 spinner.stop()
-                if hasText { print() }  // end response line
+                print("\n")  // newline to end response + blank line after
 
                 // Update stats
                 let usage = await agent.tokenUsage
