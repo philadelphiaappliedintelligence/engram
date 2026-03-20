@@ -49,10 +49,10 @@ public actor DaemonLoop {
             Task { await self.executeCronJob(job) }
         }
 
-        // Main loop — heartbeat every 60s, gateway poll every 5s
+        // Main loop — gateway drain every 1s, heartbeat every 60s
         var tick = 0
         while isRunning {
-            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
             guard isRunning else { break }
 
             tick += 1
@@ -60,31 +60,31 @@ public actor DaemonLoop {
             // Poll gateway platforms every tick (5s)
             await pollPlatforms()
 
-            // Cron + save + session eviction every 60s (12 ticks)
-            if tick % 12 == 0 {
+            // Cron + save + session eviction every 60s
+            if tick % 60 == 0 {
                 scheduler.tick()
                 shelf.saveAll()
                 evictIdleSessions()
             }
 
-            // Reconnect dropped platforms every 5 minutes (60 ticks)
-            if tick % 60 == 0 {
+            // Reconnect dropped platforms every 5 minutes
+            if tick % 300 == 0 {
                 await reconnectPlatforms()
             }
 
-            // Log every 5 minutes (60 ticks)
-            if tick % 60 == 0 {
-                let mins = tick / 12
+            // Log every 5 minutes
+            if tick % 300 == 0 {
+                let mins = tick / 60
                 log("Heartbeat — \(shelf.nuggetNames.count) nuggets, \(totalFacts()) facts, \(platforms.count) platforms, uptime \(mins)m")
             }
 
-            // Memory consolidation every 6 hours (4320 ticks at 5s)
-            if tick % 4320 == 0 {
+            // Memory consolidation every 6 hours
+            if tick % 21600 == 0 {
                 await consolidateMemory()
             }
 
             // Rotate logs daily
-            if tick % (1440 * 12) == 0 { rotateLogs() }
+            if tick % 86400 == 0 { rotateLogs() }
         }
 
         // Cleanup
@@ -200,10 +200,6 @@ public actor DaemonLoop {
                 )
             }
 
-            // Release poll lock for iMessage
-            if let imsg = platform as? IMessagePlatform {
-                await imsg.doneProcessing()
-            }
         }
     }
 
