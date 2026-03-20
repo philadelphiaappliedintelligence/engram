@@ -14,10 +14,22 @@ struct UpdateCmd: AsyncParsableCommand {
             .appendingPathComponent(".engram-build").path
         let installPath = "/usr/local/bin/engram"
 
-        print("Updating engram...\n")
+        print("Checking for updates...\n")
+
+        // Get current hash before pull
+        let oldHash = (try? output("git", ["-C", buildDir, "rev-parse", "--short", "HEAD"]))?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Pull or clone
         if FileManager.default.fileExists(atPath: "\(buildDir)/.git") {
+            try run("git", ["-C", buildDir, "fetch", "--quiet"])
+            let local = (try? output("git", ["-C", buildDir, "rev-parse", "HEAD"]))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let remote = (try? output("git", ["-C", buildDir, "rev-parse", "origin/main"]))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+            if local == remote && !local.isEmpty {
+                print("  Already up to date (\(oldHash ?? "unknown"))")
+                return
+            }
+
             print("  Pulling latest...")
             try run("git", ["-C", buildDir, "pull", "--ff-only", "--quiet"])
         } else {
@@ -26,11 +38,9 @@ struct UpdateCmd: AsyncParsableCommand {
             try run("git", ["clone", "--quiet", repo, buildDir])
         }
 
-        // Get new version info
-        let newHash = (try? output("git", ["-C", buildDir, "rev-parse", "--short", "HEAD"])) ?? "unknown"
-        print("  Latest: \(newHash.trimmingCharacters(in: .whitespacesAndNewlines))")
+        let newHash = (try? output("git", ["-C", buildDir, "rev-parse", "--short", "HEAD"]))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown"
+        print("  \(oldHash ?? "new") -> \(newHash)")
 
-        // Build
         print("  Building...")
         try run("swift", ["build", "-c", "release", "--quiet", "--package-path", buildDir])
 
@@ -73,7 +83,7 @@ struct UpdateCmd: AsyncParsableCommand {
             try? Daemon.start()
         }
 
-        print("\n  Updated to \(newHash.trimmingCharacters(in: .whitespacesAndNewlines))")
+        print("\n  Updated to \(newHash)")
     }
 
     private func run(_ executable: String, _ args: [String]) throws {
