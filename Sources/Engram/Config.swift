@@ -5,6 +5,7 @@ import Foundation
 public struct AgentConfig: Codable, Sendable {
     public var model: String
     public var summaryModel: String?   // cheap model for compaction (nil = use main model)
+    public var gatewayModel: String?   // fast model for simple gateway messages (nil = use main model)
     public var provider: String?       // "anthropic" or "openai"
     public var baseURL: String?        // custom API endpoint
     public var maxTokens: Int
@@ -19,6 +20,7 @@ public struct AgentConfig: Codable, Sendable {
     public init(
         model: String = "claude-opus-4-6",
         summaryModel: String? = nil,
+        gatewayModel: String? = nil,
         provider: String? = nil,
         baseURL: String? = nil,
         maxTokens: Int = 8192,
@@ -30,6 +32,7 @@ public struct AgentConfig: Codable, Sendable {
     ) {
         self.model = model
         self.summaryModel = summaryModel
+        self.gatewayModel = gatewayModel
         self.provider = provider
         self.baseURL = baseURL
         self.maxTokens = maxTokens

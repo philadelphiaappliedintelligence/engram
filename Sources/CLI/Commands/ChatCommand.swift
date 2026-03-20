@@ -65,6 +65,15 @@ struct Chat: AsyncParsableCommand {
             store: store, searchIndex: searchIndex
         ))
 
+        // Approval handler for dangerous tools (CLI only)
+        registry.approvalHandler = { toolName, preview in
+            print("\n\u{001B}[33m  ⚠ \(toolName)\u{001B}[0m \(preview)")
+            print("  Allow? (Y/n) ", terminator: "")
+            fflush(stdout)
+            let input = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+            return input.isEmpty || input == "y" || input == "yes"
+        }
+
         let mcpManager = MCPManager()
         if let mcpServers = config.mcpServers, !mcpServers.isEmpty {
             let mcpTools = mcpManager.startServers(from: mcpServers)

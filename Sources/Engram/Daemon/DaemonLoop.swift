@@ -10,7 +10,7 @@ public actor DaemonLoop {
     private let store: EngramStore
     private let searchIndex: SessionSearchIndex
     private var platforms: [any Platform] = []
-    private var chatSessions: [String: (agent: AgentLoop, lastActive: Date)] = [:]
+    private var chatSessions: [String: (agent: AgentLoop, sendTool: SendMessageTool?, lastActive: Date)] = [:]
     private var isRunning = false
     private let sessionMaxIdle: TimeInterval = 3600  // evict after 1 hour
     private let heartbeatInterval: TimeInterval = 60
@@ -207,9 +207,11 @@ public actor DaemonLoop {
                                        platform: any Platform) async {
         let sessionKey = "\(platform.name):\(chatId)"
         let agent: AgentLoop
+        let sendTool: SendMessageTool?
 
         if let existing = chatSessions[sessionKey] {
             agent = existing.agent
+            sendTool = existing.sendTool
             chatSessions[sessionKey]?.lastActive = Date()
         } else {
             let oauthToken = await resolveOAuthToken()
@@ -227,19 +229,29 @@ public actor DaemonLoop {
             let sessionMgr = SessionManager(sessionDir: config.sessionURL, store: store, searchIndex: searchIndex)
             sessionMgr.newSession()
 
-            registry.register(ToolSet.standard(
+            let tools = ToolSet.standard(
                 shelf: shelf, sessionId: sessionKey, client: client,
                 store: store, searchIndex: searchIndex,
                 platform: platform, chatId: chatId
-            ))
+            )
+            registry.register(tools)
+            sendTool = tools.compactMap { $0 as? SendMessageTool }.first
+
+            // Use gatewayModel if configured (faster for messaging)
+            var gwConfig = config
+            if let gwModel = config.gatewayModel {
+                gwConfig.model = gwModel
+            }
 
             agent = AgentLoop(
                 client: client, registry: registry, shelf: shelf,
-                config: config, session: sessionMgr,
+                config: gwConfig, session: sessionMgr,
                 platformHint: platform.name, store: store
             )
-            chatSessions[sessionKey] = (agent: agent, lastActive: Date())
+            chatSessions[sessionKey] = (agent: agent, sendTool: sendTool, lastActive: Date())
         }
+
+        sendTool?.resetTurnFlag()
 
         do {
             try? await platform.sendTyping(to: chatId)
@@ -250,8 +262,14 @@ public actor DaemonLoop {
                 Task { await self.log("[\(platform.name)] tool: \(name)") }
             })
             let elapsed = String(format: "%.1f", Date().timeIntervalSince(t0))
-            log("[\(platform.name)] Response (\(elapsed)s): \(String(response.prefix(80)))")
-            try await platform.sendMessage(response, to: chatId)
+            let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if !trimmed.isEmpty && sendTool?.didSendThisTurn != true {
+                log("[\(platform.name)] Response (\(elapsed)s): \(String(trimmed.prefix(80)))")
+                try await platform.sendMessage(trimmed, to: chatId)
+            } else if !trimmed.isEmpty {
+                log("[\(platform.name)] Response via tool (\(elapsed)s): \(String(trimmed.prefix(80)))")
+            }
         } catch {
             log("[\(platform.name)] Error: \(error.localizedDescription)")
             try? await platform.sendMessage("Sorry, I encountered an error.", to: chatId)

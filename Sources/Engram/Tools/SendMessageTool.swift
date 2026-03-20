@@ -1,14 +1,17 @@
 import Foundation
 
 /// Send a message or file through the current messaging platform.
-public struct SendMessageTool: Tool {
+public final class SendMessageTool: Tool, @unchecked Sendable {
     private let platform: any Platform
     private let chatId: String
+    public private(set) var didSendThisTurn = false
 
     public init(platform: any Platform, chatId: String) {
         self.platform = platform
         self.chatId = chatId
     }
+
+    public func resetTurnFlag() { didSendThisTurn = false }
 
     public var name: String { "send_message" }
     public var description: String {
@@ -36,6 +39,7 @@ public struct SendMessageTool: Tool {
             }
             do {
                 try await platform.sendFile(path: expanded, caption: text, to: chatId)
+                didSendThisTurn = true
                 let name = URL(fileURLWithPath: expanded).lastPathComponent
                 return "{\"sent_file\": \"\(name)\", \"platform\": \"\(platform.name)\"}"
             } catch {
@@ -49,6 +53,7 @@ public struct SendMessageTool: Tool {
 
         do {
             try await platform.sendMessage(text, to: chatId)
+            didSendThisTurn = true
             return "{\"sent\": true, \"platform\": \"\(platform.name)\"}"
         } catch {
             return "{\"error\": \"Send failed: \(error.localizedDescription)\"}"

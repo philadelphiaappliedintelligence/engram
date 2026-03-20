@@ -40,8 +40,9 @@ public enum ToolSet {
             VisionTool(client: client),
             BrowserTool(client: client),
 
-            // TTS
+            // TTS + STT
             TTSTool(),
+            STTTool(),
 
             // macOS Native
             CalendarTool(),

@@ -16,6 +16,15 @@ public protocol Tool: Sendable {
 public final class ToolRegistry: @unchecked Sendable {
     private var tools: [String: any Tool] = [:]
 
+    /// Tools that require user approval before execution.
+    /// Set to nil to disable approvals (e.g. in daemon/gateway mode).
+    public var approvalHandler: (@Sendable (String, String) async -> Bool)?
+
+    /// Tool names that require approval. Empty = no approvals.
+    public static let requiresApproval: Set<String> = [
+        "terminal", "file_write", "edit", "execute_code",
+    ]
+
     public init() {}
 
     public func register(_ tool: any Tool) {
@@ -34,10 +43,37 @@ public final class ToolRegistry: @unchecked Sendable {
         guard let tool = tools[name] else {
             return "{\"error\": \"Unknown tool: \(name)\"}"
         }
+
+        // Approval check for dangerous tools
+        if let handler = approvalHandler, Self.requiresApproval.contains(name) {
+            let preview = formatApprovalPreview(name: name, input: input)
+            let approved = await handler(name, preview)
+            if !approved {
+                return "{\"denied\": true, \"tool\": \"\(name)\", \"reason\": \"User denied execution\"}"
+            }
+        }
+
         do {
             return try await tool.execute(input: input)
         } catch {
             return "{\"error\": \"\(error.localizedDescription)\"}"
+        }
+    }
+
+    private func formatApprovalPreview(name: String, input: [String: JSONValue]) -> String {
+        switch name {
+        case "terminal":
+            return input["command"]?.stringValue ?? "(unknown command)"
+        case "execute_code":
+            let lang = input["language"]?.stringValue ?? "code"
+            let code = input["code"]?.stringValue ?? ""
+            return "[\(lang)] \(String(code.prefix(200)))"
+        case "file_write":
+            return input["path"]?.stringValue ?? "(unknown path)"
+        case "edit":
+            return input["file_path"]?.stringValue ?? "(unknown path)"
+        default:
+            return name
         }
     }
 
@@ -54,6 +90,7 @@ public final class ToolRegistry: @unchecked Sendable {
 
     public var count: Int { tools.count }
     public var names: [String] { tools.keys.sorted() }
+    public var all: [any Tool] { Array(tools.values) }
 }
 
 // MARK: - Schema Helpers
