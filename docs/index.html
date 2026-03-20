@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engram</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --fg: #0a0a0a;
+    --bg: #fafafa;
+    --secondary: #666;
+    --tertiary: #999;
+    --border: #d4d4d4;
+    --code-bg: #f0f0f0;
+    --mono: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #e8e8e8;
+      --bg: #0a0a0a;
+      --secondary: #999;
+      --tertiary: #666;
+      --border: #2a2a2a;
+      --code-bg: #141414;
+    }
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a { color: var(--fg); text-decoration: none; }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    height: 48px;
+    font-size: 14px;
+  }
+
+  nav .links {
+    display: flex;
+    gap: 24px;
+  }
+
+  nav a {
+    color: var(--secondary);
+    transition: color 0.15s;
+  }
+
+  nav a:hover { color: var(--fg); }
+
+  nav .logo {
+    color: var(--fg);
+    font-weight: 600;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    text-align: center;
+    padding: 180px 32px 120px;
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  .hero .overline {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--secondary);
+    letter-spacing: -0.01em;
+    margin-bottom: 16px;
+  }
+
+  .hero h1 {
+    font-weight: 600;
+    font-size: clamp(48px, 7vw, 80px);
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    margin-bottom: 24px;
+  }
+
+  .hero .sub {
+    font-size: clamp(19px, 2.5vw, 24px);
+    line-height: 1.5;
+    color: var(--secondary);
+    max-width: 600px;
+    margin: 0 auto 48px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+
+  .install-block {
+    display: inline-block;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 14px 24px;
+    font-family: var(--mono);
+    font-size: 15px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .install-block:hover { opacity: 0.7; }
+
+  .install-hint {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--tertiary);
+  }
+
+  /* ── SECTION HERO (centered intro blocks) ── */
+  .section-hero {
+    text-align: center;
+    padding: 120px 32px 0;
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  .section-hero .label {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 12px;
+  }
+
+  .section-hero h2 {
+    font-weight: 600;
+    font-size: clamp(32px, 5vw, 56px);
+    line-height: 1.07;
+    letter-spacing: -0.035em;
+    margin-bottom: 16px;
+  }
+
+  .section-hero p {
+    font-size: clamp(17px, 2vw, 21px);
+    line-height: 1.5;
+    color: var(--secondary);
+    max-width: 560px;
+    margin: 0 auto;
+    letter-spacing: -0.01em;
+  }
+
+  /* ── DETAIL SECTIONS ── */
+  .section-detail {
+    padding: 48px 32px 0;
+    max-width: 820px;
+    margin: 0 auto;
+  }
+
+  .section-detail h3 {
+    font-weight: 600;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+
+  .section-detail p {
+    color: var(--secondary);
+    font-size: 17px;
+    line-height: 1.65;
+    margin-bottom: 20px;
+  }
+
+  /* ── MEMORY DIAGRAM ── */
+  .memory-visual {
+    margin: 24px 0 32px;
+    padding: 24px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 2.2;
+  }
+
+  .memory-visual .op { font-weight: 600; }
+  .memory-visual .dim { color: var(--tertiary); }
+
+  /* ── FEATURE GRID ── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    max-width: 820px;
+    margin: 48px auto 0;
+  }
+
+  @media (max-width: 640px) {
+    .feature-grid { grid-template-columns: 1fr; }
+  }
+
+  .feature-cell {
+    background: var(--bg);
+    padding: 28px 24px;
+  }
+
+  .feature-cell .label {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tertiary);
+    margin-bottom: 6px;
+  }
+
+  .feature-cell .value {
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--secondary);
+  }
+
+  /* ── TOOLS ── */
+  .tool-list {
+    max-width: 820px;
+    margin: 56px auto 0;
+    border: 1px solid var(--border);
+  }
+
+  .tool-row {
+    display: flex;
+    gap: 16px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    align-items: baseline;
+  }
+
+  .tool-row:last-child { border-bottom: none; }
+
+  .tool-row .tool-name {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 110px;
+    flex-shrink: 0;
+  }
+
+  .tool-row .tool-desc {
+    font-size: 15px;
+    color: var(--secondary);
+    line-height: 1.45;
+  }
+
+  /* ── PLATFORMS ── */
+  .platform-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    max-width: 820px;
+    margin: 56px auto 0;
+  }
+
+  @media (max-width: 640px) {
+    .platform-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .platform-item {
+    background: var(--bg);
+    padding: 32px 24px;
+    text-align: center;
+  }
+
+  .platform-item .name {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .platform-item .note {
+    font-size: 14px;
+    color: var(--tertiary);
+  }
+
+  /* ── PROVIDERS ── */
+  .provider-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    max-width: 820px;
+    margin: 56px auto 0;
+  }
+
+  @media (max-width: 640px) {
+    .provider-grid { grid-template-columns: 1fr; }
+  }
+
+  .provider-cell {
+    background: var(--bg);
+    padding: 24px;
+  }
+
+  .provider-cell .name {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .provider-cell .desc {
+    font-size: 14px;
+    color: var(--tertiary);
+    line-height: 1.45;
+  }
+
+  /* ── CODE ── */
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 24px;
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.8;
+    overflow-x: auto;
+    margin: 32px 0;
+    max-width: 820px;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: 14px;
+  }
+
+  /* ── IDENTITY ── */
+  .identity-list {
+    max-width: 820px;
+    margin: 56px auto 0;
+    border: 1px solid var(--border);
+  }
+
+  .identity-row {
+    display: flex;
+    gap: 24px;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    align-items: baseline;
+  }
+
+  .identity-row:last-child { border-bottom: none; }
+
+  .identity-row .filename {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 500;
+    min-width: 130px;
+    flex-shrink: 0;
+  }
+
+  .identity-row .desc {
+    font-size: 15px;
+    color: var(--secondary);
+    line-height: 1.5;
+  }
+
+  /* ── GET STARTED ── */
+  .get-started {
+    text-align: center;
+    padding: 120px 32px;
+    max-width: 820px;
+    margin: 0 auto;
+  }
+
+  .get-started h2 {
+    font-weight: 600;
+    font-size: clamp(32px, 4vw, 48px);
+    letter-spacing: -0.035em;
+    margin-bottom: 16px;
+  }
+
+  .get-started p {
+    font-size: 19px;
+    color: var(--secondary);
+    margin-bottom: 32px;
+    line-height: 1.5;
+  }
+
+  .get-started pre {
+    text-align: left;
+    margin: 0 auto;
+    display: inline-block;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 32px;
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    font-size: 13px;
+    color: var(--tertiary);
+  }
+
+  footer a { color: var(--tertiary); }
+  footer a:hover { color: var(--fg); }
+
+  /* ── SEPARATOR ── */
+  .separator {
+    max-width: 820px;
+    margin: 0 auto;
+    border: none;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="logo">Engram</a>
+  <div class="links">
+    <a href="#memory">Memory</a>
+    <a href="#tools">Tools</a>
+    <a href="#gateway">Gateway</a>
+    <a href="documentation.html">Docs</a>
+    <a href="https://github.com/anthropics/engram">GitHub</a>
+  </div>
+</nav>
+
+<!-- ═══ HERO ═══ -->
+<div class="hero">
+  <div class="overline">AI Agent for macOS</div>
+  <h1>Minimal agent.<br>Total recall.</h1>
+  <p class="sub">
+    A native macOS agent that remembers everything, runs anywhere on your system, and never phones home to think. Built in Swift. One dependency.
+  </p>
+  <div class="install-block" onclick="navigator.clipboard.writeText('swift build -c release')">
+    $ swift build -c release
+  </div>
+  <div class="install-hint">macOS 14 or later. Click to copy.</div>
+</div>
+
+<hr class="separator">
+
+<!-- ═══ MEMORY ═══ -->
+<div class="section-hero" id="memory">
+  <div class="label">Memory</div>
+  <h2>Not a database.<br>A hologram.</h2>
+  <p>
+    Facts are superposed in complex vector space and recalled with pure algebra. Sub-millisecond. No embeddings API. No retrieval pipeline. No network call. Just math that runs in-process.
+  </p>
+</div>
+
+<div class="section-detail">
+  <h3>How it works</h3>
+  <p>
+    Engram uses Holographic Reduced Representations — a model from cognitive science. Each fact is a key-value pair bound into a complex vector. Multiple facts layer into one vector, like holograms on film. To recall, reverse the binding and match.
+  </p>
+
+  <div class="memory-visual">
+    <span class="op">bind</span>(key, value) <span class="dim">→ one vector encodes the pair</span><br>
+    <span class="op">superpose</span>(memory, binding) <span class="dim">→ layered into the hologram</span><br>
+    <span class="op">unbind</span>(memory, key) <span class="dim">→ algebraic decode</span><br>
+    <span class="op">match</span>(result, known) <span class="dim">→ "black" at 0.97 confidence</span>
+  </div>
+
+  <h3>It learns what matters</h3>
+  <p>
+    Facts are organized into topic-scoped nuggets — preferences, people, projects. The agent manages these on its own. A fact recalled three or more times across sessions promotes into permanent context. Usage determines importance. Not rules. Not tags. Just what gets reached for.
+  </p>
+</div>
+
+<div class="feature-grid">
+  <div class="feature-cell">
+    <div class="label">Recall</div>
+    <div class="value">Sub-millisecond. In-process algebra. No API call, no index scan.</div>
+  </div>
+  <div class="feature-cell">
+    <div class="label">Storage</div>
+    <div class="value">Local JSON in ~/.engram/memory. Nothing leaves your machine.</div>
+  </div>
+  <div class="feature-cell">
+    <div class="label">Dimensions</div>
+    <div class="value">512-dimensional complex vectors. Configurable.</div>
+  </div>
+  <div class="feature-cell">
+    <div class="label">Matching</div>
+    <div class="value">Fuzzy key resolution. "fav color" finds "favorite_color".</div>
+  </div>
+</div>
+
+<hr class="separator" style="margin-top: 120px;">
+
+<!-- ═══ IDENTITY ═══ -->
+<div class="section-hero" id="identity">
+  <div class="label">Identity</div>
+  <h2>Three plain files<br>define everything.</h2>
+  <p>
+    No config schema. No JSON. Three markdown files in ~/.engram that the agent reads, writes, and evolves as it learns who you are and what you need.
+  </p>
+</div>
+
+<div class="identity-list">
+  <div class="identity-row">
+    <span class="filename">SOUL.md</span>
+    <span class="desc">Name, personality, behavior. Updated when you rename the agent or change how it works.</span>
+  </div>
+  <div class="identity-row">
+    <span class="filename">USER.md</span>
+    <span class="desc">Everything the agent knows about you. Name, timezone, projects, preferences. Built incrementally.</span>
+  </div>
+  <div class="identity-row">
+    <span class="filename">BOOTSTRAP.md</span>
+    <span class="desc">First-run instructions. Auto-deleted once the agent knows who it's talking to.</span>
+  </div>
+</div>
+
+<hr class="separator" style="margin-top: 120px;">
+
+<!-- ═══ TOOLS ═══ -->
+<div class="section-hero" id="tools">
+  <div class="label">Tools</div>
+  <h2>Your Mac is the toolbox.</h2>
+  <p>
+    30+ built-in tools. Native macOS frameworks where possible. Shell utilities as fallback. No containers. No package managers. Extensible via MCP and skills.
+  </p>
+</div>
+
+<div class="tool-list">
+  <div class="tool-row">
+    <span class="tool-name">memory</span>
+    <span class="tool-desc">Remember, recall, forget. Holographic storage across topic-scoped nuggets.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">files</span>
+    <span class="tool-desc">Read, write, search, surgical edit, regex grep. Numbered lines, glob patterns.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">terminal</span>
+    <span class="tool-desc">Shell execution with timeout and dangerous command blocklist.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">code</span>
+    <span class="tool-desc">Run Python, JavaScript, or Bash in isolated subprocesses.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">web</span>
+    <span class="tool-desc">Fetch any URL. DuckDuckGo search with no API key.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">browser</span>
+    <span class="tool-desc">Safari automation. Open, read, screenshot, click, type, execute JavaScript.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">vision</span>
+    <span class="tool-desc">Image analysis via LLM. PNG, JPG, GIF, WebP.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">calendar</span>
+    <span class="tool-desc">EventKit. View, search, and create events.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">contacts</span>
+    <span class="tool-desc">Contacts.framework. Search and retrieve structured contact data.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">spotlight</span>
+    <span class="tool-desc">macOS Spotlight. Search by kind — documents, images, audio, code.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">clipboard</span>
+    <span class="tool-desc">Read from and write to the system pasteboard.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">tts</span>
+    <span class="tool-desc">On-device speech synthesis. No network required.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">skills</span>
+    <span class="tool-desc">List, view, create. The agent extends its own capabilities at runtime.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">cron</span>
+    <span class="tool-desc">Schedule prompts with standard cron expressions. Fires via daemon.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">delegate</span>
+    <span class="tool-desc">Spawn isolated sub-agents with independent tool registries.</span>
+  </div>
+  <div class="tool-row">
+    <span class="tool-name">search</span>
+    <span class="tool-desc">Full-text search across every past conversation.</span>
+  </div>
+</div>
+
+<hr class="separator" style="margin-top: 120px;">
+
+<!-- ═══ GATEWAY ═══ -->
+<div class="section-hero" id="gateway">
+  <div class="label">Gateway</div>
+  <h2>One agent.<br>Every channel.</h2>
+  <p>
+    Run Engram as a daemon and reach it from iMessage, Telegram, Discord, Slack, email, or Home Assistant. Same memory. Same tools. Different front door.
+  </p>
+</div>
+
+<div class="platform-grid">
+  <div class="platform-item">
+    <div class="name">iMessage</div>
+    <div class="note">Local, no token needed</div>
+  </div>
+  <div class="platform-item">
+    <div class="name">Telegram</div>
+    <div class="note">Bot API, long-polling</div>
+  </div>
+  <div class="platform-item">
+    <div class="name">Discord</div>
+    <div class="note">WebSocket gateway</div>
+  </div>
+  <div class="platform-item">
+    <div class="name">Slack</div>
+    <div class="note">Socket Mode</div>
+  </div>
+  <div class="platform-item">
+    <div class="name">Email</div>
+    <div class="note">IMAP + SMTP</div>
+  </div>
+  <div class="platform-item">
+    <div class="name">Home Assistant</div>
+    <div class="note">REST API + webhooks</div>
+  </div>
+</div>
+
+<hr class="separator" style="margin-top: 120px;">
+
+<!-- ═══ PROVIDERS ═══ -->
+<div class="section-hero" id="providers">
+  <div class="label">Providers</div>
+  <h2>Bring any model.</h2>
+  <p>
+    Anthropic by default. Swap to OpenAI, OpenRouter, Ollama, or any compatible endpoint. Use your API key, your OAuth login, or run inference locally with no key at all.
+  </p>
+</div>
+
+<div class="provider-grid">
+  <div class="provider-cell">
+    <div class="name">Anthropic</div>
+    <div class="desc">Claude Opus, Sonnet, Haiku. API key or OAuth. Prompt caching.</div>
+  </div>
+  <div class="provider-cell">
+    <div class="name">OpenAI</div>
+    <div class="desc">GPT-4o, o3. API key or device code OAuth.</div>
+  </div>
+  <div class="provider-cell">
+    <div class="name">OpenRouter</div>
+    <div class="desc">Hundreds of models through a single key.</div>
+  </div>
+  <div class="provider-cell">
+    <div class="name">Ollama</div>
+    <div class="desc">Run models locally. No API key. No network.</div>
+  </div>
+  <div class="provider-cell">
+    <div class="name">Groq / Cerebras</div>
+    <div class="desc">Hardware-accelerated inference.</div>
+  </div>
+  <div class="provider-cell">
+    <div class="name">Together / Mistral / xAI / DeepSeek</div>
+    <div class="desc">Open and frontier models via API.</div>
+  </div>
+</div>
+
+<hr class="separator" style="margin-top: 120px;">
+
+<!-- ═══ GET STARTED ═══ -->
+<div class="get-started">
+  <h2>Get started.</h2>
+  <p>Clone, build, talk.</p>
+<pre>
+git clone https://github.com/anthropics/engram.git
+cd engram && swift build -c release
+
+export ANTHROPIC_API_KEY="sk-ant-..."
+.build/release/engram chat
+</pre>
+</div>
+
+<footer>
+  <span>Engram</span>
+  <a href="https://github.com/anthropics/engram">GitHub</a>
+  <a href="documentation.html">Documentation</a>
+  <span>MIT License</span>
+</footer>
+
+</body>
+</html>
