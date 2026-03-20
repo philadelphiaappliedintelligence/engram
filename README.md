@@ -174,18 +174,18 @@ The agent can also create skills at runtime — it extends its own capabilities 
 
 ## Providers
 
-| Provider | Auth | Models |
-|---|---|---|
-| Anthropic | API key or OAuth | Claude Opus, Sonnet, Haiku |
-| OpenAI | API key or OAuth | GPT-4o, o3 |
-| OpenRouter | API key | Hundreds of models |
-| Ollama | None (local) | Llama, Mistral, Qwen, etc. |
-| Groq | API key | Fast inference |
-| Together | API key | Open models |
-| Mistral | API key | Mistral models |
-| xAI | API key | Grok |
-| DeepSeek | API key | DeepSeek models |
-| Cerebras | API key | Fast inference |
+| Provider | Auth |
+|---|---|
+| Anthropic | API key or OAuth |
+| OpenAI | API key or OAuth |
+| OpenRouter | API key |
+| Ollama | None (local) |
+| Groq | API key |
+| Together | API key |
+| Mistral | API key |
+| xAI | API key |
+| DeepSeek | API key |
+| Cerebras | API key |
 
 ## Configuration
 
