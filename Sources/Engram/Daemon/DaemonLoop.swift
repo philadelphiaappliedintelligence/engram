@@ -199,6 +199,11 @@ public actor DaemonLoop {
                     platform: platform
                 )
             }
+
+            // Release poll lock for iMessage
+            if let imsg = platform as? IMessagePlatform {
+                await imsg.doneProcessing()
+            }
         }
     }
 

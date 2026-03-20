@@ -13,6 +13,8 @@ public actor IMessagePlatform: Platform {
     private var allowedHandles: Set<String>?
     private let imcore: IMCoreBridge?
     private var imcoreAvailable = false
+    private var seenGUIDs: Set<String> = []
+    private var isProcessing = false
 
     public init(config: IMessageConfig = IMessageConfig()) {
         self.lastMessageDate = Date()
@@ -135,6 +137,9 @@ public actor IMessagePlatform: Platform {
     // MARK: - Poll via chat.db
 
     public func poll() async throws -> [(chatId: String, sender: String, text: String)] {
+        // Skip if still processing previous batch
+        guard !isProcessing else { return [] }
+
         let dbPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Messages/chat.db").path
 
@@ -171,9 +176,14 @@ public actor IMessagePlatform: Platform {
 
         for line in output.components(separatedBy: "\n") where !line.isEmpty {
             let parts = line.components(separatedBy: "\t")
-            guard parts.count >= 3 else { continue }
+            guard parts.count >= 5 else { continue }
             let text = parts[0]
             let handle = parts[2]
+            let guid = parts[4]
+
+            // Dedup: skip already-seen messages
+            guard !seenGUIDs.contains(guid) else { continue }
+            seenGUIDs.insert(guid)
 
             // Allowlist check
             if let allowed = allowedHandles {
@@ -185,9 +195,11 @@ public actor IMessagePlatform: Platform {
         }
 
         if !messages.isEmpty {
+            // Update timestamp immediately to prevent re-fetch
             lastMessageDate = Date()
+            isProcessing = true
 
-            // Auto-mark as read for received messages
+            // Auto-mark as read
             if imcoreAvailable, let imcore {
                 let handles = Set(messages.map(\.chatId))
                 for handle in handles {
@@ -196,7 +208,17 @@ public actor IMessagePlatform: Platform {
             }
         }
 
+        // Cap seen GUIDs to prevent unbounded growth
+        if seenGUIDs.count > 1000 {
+            seenGUIDs = Set(seenGUIDs.suffix(500))
+        }
+
         return messages
+    }
+
+    /// Call after processing a batch to allow the next poll.
+    public func doneProcessing() {
+        isProcessing = false
     }
 
     // MARK: - Reconnect

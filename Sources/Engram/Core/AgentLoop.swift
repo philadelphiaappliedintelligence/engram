@@ -107,17 +107,35 @@ public actor AgentLoop {
                 return response.textContent
             }
 
-            var toolResults: [ContentBlock] = []
-            for toolCall in response.toolCalls {
-                onToolCall(toolCall.name, toolCall.id)
-                let result = try await registry.dispatch(name: toolCall.name, input: toolCall.input)
-                toolResults.append(.toolResult(ToolResultBlock(
-                    toolUseId: toolCall.id, content: result
-                )))
-                _ = session.append(
-                    role: "user",
-                    content: "[\(toolCall.name)] \(String(result.prefix(500)))"
-                )
+            let toolCalls = response.toolCalls
+            for tc in toolCalls { onToolCall(tc.name, tc.id) }
+
+            // Execute tool calls concurrently
+            let toolResults: [ContentBlock] = await withTaskGroup(of: (Int, String).self) { group in
+                for (i, toolCall) in toolCalls.enumerated() {
+                    let reg = registry
+                    group.addTask {
+                        let result = (try? await reg.dispatch(name: toolCall.name, input: toolCall.input))
+                            ?? "{\"error\": \"Tool execution failed\"}"
+                        return (i, result)
+                    }
+                }
+                var results = [(Int, String)]()
+                for await r in group { results.append(r) }
+                results.sort { $0.0 < $1.0 }
+
+                // Build results in original order
+                var blocks = [ContentBlock]()
+                for (i, result) in results {
+                    blocks.append(.toolResult(ToolResultBlock(
+                        toolUseId: toolCalls[i].id, content: result
+                    )))
+                    _ = session.append(
+                        role: "user",
+                        content: "[\(toolCalls[i].name)] \(String(result.prefix(500)))"
+                    )
+                }
+                return blocks
             }
 
             history.append(Message(role: .user, content: toolResults))
