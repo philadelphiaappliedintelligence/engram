@@ -2,15 +2,23 @@ import Foundation
 
 /// Multi-topic holographic memory manager.
 /// Each nugget is a topic-scoped memory (e.g. "preferences", "project", "people").
+/// Persistence is backed by EngramStore (SwiftData).
 public final class Shelf: Sendable {
     public let saveDir: URL
     private let _nuggets: LockedValue<[String: Nugget]>
     private let dimension: Int
+    private let _store: LockedValue<EngramStore?>
 
-    public init(saveDir: URL, dimension: Int = 512) {
+    public init(saveDir: URL, dimension: Int = 512, store: EngramStore? = nil) {
         self.saveDir = saveDir
         self.dimension = dimension
         self._nuggets = LockedValue([:])
+        self._store = LockedValue(store)
+    }
+
+    /// Update the backing store (e.g. after async initialization).
+    public func setStore(_ store: EngramStore) {
+        _store.withLock { $0 = store }
     }
 
     // MARK: - Nugget Management
@@ -30,8 +38,16 @@ public final class Shelf: Sendable {
 
     public func removeNugget(named name: String) {
         _nuggets.withLock { $0.removeValue(forKey: name) }
-        let file = saveDir.appendingPathComponent("\(name).nugget.json")
-        try? FileManager.default.removeItem(at: file)
+        // Also remove from store if available
+        if let store = _store.withLock({ $0 }) {
+            let nuggetName = name
+            Task {
+                let facts = await store.loadFacts(nugget: nuggetName)
+                for fact in facts {
+                    _ = await store.deleteFact(nugget: nuggetName, key: fact.key)
+                }
+            }
+        }
     }
 
     public var nuggetNames: [String] {
@@ -106,9 +122,47 @@ public final class Shelf: Sendable {
         return promoted.sorted { $0.fact.hits > $1.fact.hits }
     }
 
-    // MARK: - Persistence
+    // MARK: - Persistence (SwiftData-backed)
 
+    /// Load all facts from EngramStore into in-memory nuggets.
     public func loadAll() {
+        if let store = _store.withLock({ $0 }) {
+            // Load from SwiftData store
+            Task {
+                let allFacts = await store.loadAllFacts()
+                for (nuggetName, facts) in allFacts {
+                    let nug = self.nugget(named: nuggetName)
+                    for fact in facts {
+                        nug._loadFact(key: fact.key, value: fact.value, hits: fact.hits, lastHitSession: fact.session)
+                    }
+                }
+            }
+        } else {
+            // Fallback: load from JSON files (legacy)
+            loadFromFiles()
+        }
+    }
+
+    /// Save all facts to EngramStore.
+    public func saveAll() {
+        if let store = _store.withLock({ $0 }) {
+            let all = _nuggets.withLock { Array($0) }
+            Task {
+                for (name, nug) in all {
+                    for fact in nug.facts {
+                        await store.saveFact(nugget: name, key: fact.key, value: fact.value,
+                                             hits: fact.hits, session: fact.lastHitSession)
+                    }
+                }
+            }
+        } else {
+            saveToFiles()
+        }
+    }
+
+    // MARK: - Legacy File Persistence
+
+    private func loadFromFiles() {
         let fm = FileManager.default
         try? fm.createDirectory(at: saveDir, withIntermediateDirectories: true)
 
@@ -127,7 +181,7 @@ public final class Shelf: Sendable {
         }
     }
 
-    public func saveAll() {
+    private func saveToFiles() {
         let fm = FileManager.default
         try? fm.createDirectory(at: saveDir, withIntermediateDirectories: true)
 

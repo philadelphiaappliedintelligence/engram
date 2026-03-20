@@ -52,7 +52,9 @@ struct DaemonCmd: AsyncParsableCommand {
 
         case "run":
             let config = AgentConfig.load()
-            let daemon = DaemonLoop(config: config)
+            let container = try EngramStore.makeContainer()
+            let store = EngramStore(modelContainer: container)
+            let daemon = DaemonLoop(config: config, store: store)
             await daemon.run()
 
         default:

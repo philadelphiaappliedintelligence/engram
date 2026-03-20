@@ -77,7 +77,9 @@ public struct AgentConfig: Codable, Sendable {
 
     public static func load() -> AgentConfig {
         loadEnvFile()
-        ensureFirstBoot()
+
+        let dir = configDir
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let file = configFile
         guard FileManager.default.fileExists(atPath: file.path),
@@ -93,18 +95,11 @@ public struct AgentConfig: Codable, Sendable {
         return config
     }
 
-    /// Create ~/.engram/ structure and identity stubs on first boot
-    private static func ensureFirstBoot() {
-        let fm = FileManager.default
-        let dir = configDir
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-
-        let stubs: [(String, String)] = [
-            ("SOUL.md", """
-            # Soul
-
-            <!-- Your name and personality. The user may name you on first conversation. -->
-
+    /// Seed default identities into the store on first boot.
+    /// Call once after creating the EngramStore.
+    public static func ensureDefaultIdentities(store: EngramStore) async {
+        let defaults: [(String, String)] = [
+            ("soul", """
             Your name is Engram.
 
             Be genuinely helpful, not performatively helpful. Skip filler words and just help.
@@ -116,46 +111,61 @@ public struct AgentConfig: Codable, Sendable {
             Memory is invisible. Never announce that you're remembering or recalling. Just know things.
 
             Concise when needed, thorough when it matters.
-
             """),
-            ("USER.md", """
-            # User
-
-            <!-- About your human. Update this as you learn about them. -->
-
-            - **Name:**
-            - **What to call them:**
-            - **Timezone:**
-            - **Notes:**
-
-            ## Context
-
-            <!-- What do they care about? What are they working on? Build this over time. -->
-
-            """),
-            ("BOOTSTRAP.md", """
-            # Bootstrap
-
-            <!-- What to do on first conversation. Delete this file once you know who you are. -->
-
-            You just came online. There's no memory yet.
-
-            Don't interrogate. Don't list your capabilities. Just talk.
-
-            If you don't know who the user is, ask naturally. Learn their name, what they're working on, how they like to communicate. Store what you learn.
-
-            If you don't have a name yet (SOUL.md still says "Engram"), ask the user what they'd like to call you. Update SOUL.md with the name they give you.
-
-            If memory already exists, use it silently. Greet them like you know them.
-
+            ("user", ""),
+            ("bootstrap", """
+            Ask the user their name and what to call you.
             """),
         ]
-        for (name, content) in stubs {
-            let file = dir.appendingPathComponent(name)
-            if !fm.fileExists(atPath: file.path) {
-                try? content.write(to: file, atomically: true, encoding: .utf8)
+        for (key, content) in defaults {
+            let existing = await store.getIdentity(key)
+            if existing == nil {
+                await store.setIdentity(key, content: content)
             }
         }
+    }
+
+    /// Check Full Disk Access by testing readability of ~/Library/Messages/chat.db.
+    /// Returns true if FDA is available.
+    public static func checkFullDiskAccess() -> Bool {
+        let chatDB = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Messages/chat.db")
+        return FileManager.default.isReadableFile(atPath: chatDB.path)
+    }
+
+    /// Prompt the user for Full Disk Access if not already granted.
+    /// Stores the result in the given store so we don't re-prompt.
+    public static func promptFDAIfNeeded(store: EngramStore) async {
+        // Check if we already prompted
+        if let status = await store.getConfig("fda_prompted"), status == "true" {
+            return
+        }
+
+        if checkFullDiskAccess() {
+            await store.setConfig("fda_status", value: "granted")
+            await store.setConfig("fda_prompted", value: "true")
+            return
+        }
+
+        print("""
+
+        Engram needs Full Disk Access for calendar, contacts, and iMessage.
+
+          1. Open System Settings
+          2. Privacy & Security > Full Disk Access
+          3. Add: ~/bin/engram
+          4. Restart engram
+
+        Skip for now? (y/N)\(" ")
+        """)
+
+        if let input = readLine()?.trimmingCharacters(in: .whitespaces).lowercased(),
+           input == "y" || input == "yes" {
+            await store.setConfig("fda_status", value: "skipped")
+        } else {
+            await store.setConfig("fda_status", value: "pending")
+        }
+        await store.setConfig("fda_prompted", value: "true")
     }
 
     public func save() throws {

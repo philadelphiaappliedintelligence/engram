@@ -9,7 +9,7 @@ struct EngramCLI: AsyncParsableCommand {
         abstract: "AI agent with holographic memory",
         subcommands: [Chat.self, Login.self, ModelCmd.self, Setup.self,
                       Memory.self, Sessions.self, Skills.self,
-                      GatewayCmd.self, DaemonCmd.self],
+                      GatewayCmd.self, DaemonCmd.self, IdentityCmd.self],
         defaultSubcommand: Chat.self
     )
 }

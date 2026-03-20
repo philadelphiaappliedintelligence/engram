@@ -25,14 +25,12 @@ public struct CronExpression: Codable, Sendable {
         self.weekdays = try FieldMatcher.parse(fields[4], range: 0...6)
     }
 
-    /// Check if the given date matches this cron expression.
     public func matches(_ date: Date) -> Bool {
         let cal = Calendar.current
         let comps = cal.dateComponents([.minute, .hour, .day, .month, .weekday], from: date)
         guard let minute = comps.minute, let hour = comps.hour,
               let day = comps.day, let month = comps.month,
               let weekday = comps.weekday else { return false }
-        // Calendar weekday: 1=Sun, cron: 0=Sun
         let cronWeekday = weekday - 1
         return minutes.matches(minute) && hours.matches(hour) &&
                days.matches(day) && months.matches(month) &&
@@ -89,8 +87,8 @@ private enum FieldMatcher: Codable, Sendable {
 public struct CronJob: Codable, Sendable, Identifiable {
     public let id: String
     public var name: String
-    public var schedule: String          // raw cron expression
-    public var prompt: String            // what to send to the agent
+    public var schedule: String
+    public var prompt: String
     public var enabled: Bool
     public var lastRun: Date?
     public var createdAt: Date
@@ -105,49 +103,95 @@ public struct CronJob: Codable, Sendable, Identifiable {
         self.createdAt = Date()
     }
 
-    /// Parse the schedule into a CronExpression.
+    public init(id: String, name: String, schedule: String, prompt: String,
+                enabled: Bool, lastRun: Date?, createdAt: Date) {
+        self.id = id
+        self.name = name
+        self.schedule = schedule
+        self.prompt = prompt
+        self.enabled = enabled
+        self.lastRun = lastRun
+        self.createdAt = createdAt
+    }
+
     public func expression() throws -> CronExpression {
         try CronExpression(schedule)
     }
 }
 
-// MARK: - Cron Store
+// MARK: - Cron Store (SwiftData-backed with JSON fallback)
 
-/// Persists cron jobs to ~/.engram/cron/jobs.json
 public final class CronStore: @unchecked Sendable {
     private let file: URL
     private var jobs: [CronJob] = []
     private let lock = NSLock()
+    private let store: EngramStore?
 
-    public init(storeDir: URL) {
+    public init(storeDir: URL, store: EngramStore? = nil) {
         self.file = storeDir.appendingPathComponent("jobs.json")
-        try? FileManager.default.createDirectory(at: storeDir, withIntermediateDirectories: true)
+        self.store = store
+        if store == nil {
+            try? FileManager.default.createDirectory(at: storeDir, withIntermediateDirectories: true)
+        }
     }
 
     public func load() {
         lock.lock()
         defer { lock.unlock() }
-        guard let data = try? Data(contentsOf: file) else { return }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        jobs = (try? decoder.decode([CronJob].self, from: data)) ?? []
+
+        if let store {
+            let semaphore = DispatchSemaphore(value: 0)
+            Task {
+                let loaded = await store.loadCronJobs()
+                self.jobs = loaded.map { CronJob(id: $0.id, name: $0.name, schedule: $0.schedule,
+                                                  prompt: $0.prompt, enabled: $0.enabled,
+                                                  lastRun: $0.lastRun, createdAt: $0.createdAt) }
+                semaphore.signal()
+            }
+            semaphore.wait()
+        } else {
+            guard let data = try? Data(contentsOf: file) else { return }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            jobs = (try? decoder.decode([CronJob].self, from: data)) ?? []
+        }
     }
 
     public func save() {
-        lock.lock()
-        defer { lock.unlock() }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted]
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(jobs) else { return }
-        try? data.write(to: file, options: .atomic)
+        if let store {
+            lock.lock()
+            let snapshot = jobs
+            lock.unlock()
+            Task {
+                for job in snapshot {
+                    await store.saveCronJob(id: job.id, name: job.name, schedule: job.schedule,
+                                            prompt: job.prompt, enabled: job.enabled, lastRun: job.lastRun)
+                }
+            }
+        } else {
+            lock.lock()
+            defer { lock.unlock() }
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted]
+            encoder.dateEncodingStrategy = .iso8601
+            guard let data = try? encoder.encode(jobs) else { return }
+            try? data.write(to: file, options: .atomic)
+        }
     }
 
     public func add(_ job: CronJob) {
         lock.lock()
         jobs.append(job)
         lock.unlock()
-        save()
+
+        if let store {
+            Task {
+                await store.saveCronJob(id: job.id, name: job.name, schedule: job.schedule,
+                                        prompt: job.prompt, enabled: job.enabled, lastRun: job.lastRun)
+            }
+        } else {
+            save()
+        }
     }
 
     public func remove(id: String) -> Bool {
@@ -156,7 +200,14 @@ public final class CronStore: @unchecked Sendable {
         jobs.removeAll { $0.id == id }
         let removed = jobs.count < before
         lock.unlock()
-        if removed { save() }
+
+        if removed {
+            if let store {
+                Task { _ = await store.deleteCronJob(id: id) }
+            } else {
+                save()
+            }
+        }
         return removed
     }
 
@@ -166,7 +217,12 @@ public final class CronStore: @unchecked Sendable {
             jobs[idx].enabled = enabled
         }
         lock.unlock()
-        save()
+
+        if let store {
+            Task { await store.setCronJobEnabled(id: id, enabled: enabled) }
+        } else {
+            save()
+        }
     }
 
     public func markRun(id: String, at date: Date = Date()) {
@@ -175,7 +231,12 @@ public final class CronStore: @unchecked Sendable {
             jobs[idx].lastRun = date
         }
         lock.unlock()
-        save()
+
+        if let store {
+            Task { await store.updateCronJobLastRun(id: id, date: date) }
+        } else {
+            save()
+        }
     }
 
     public var allJobs: [CronJob] {
@@ -193,8 +254,6 @@ public final class CronStore: @unchecked Sendable {
 
 // MARK: - Cron Scheduler
 
-/// Tick-based scheduler. Call `tick()` every minute from the daemon loop.
-/// When a job's cron expression matches the current time, it fires.
 public final class CronScheduler: @unchecked Sendable {
     private let store: CronStore
     public var onFire: ((CronJob) -> Void)?
@@ -203,8 +262,6 @@ public final class CronScheduler: @unchecked Sendable {
         self.store = store
     }
 
-    /// Check all enabled jobs against the current time.
-    /// Call this once per minute.
     public func tick() {
         let now = Date()
         let cal = Calendar.current
@@ -213,7 +270,6 @@ public final class CronScheduler: @unchecked Sendable {
             guard let expr = try? job.expression() else { continue }
             guard expr.matches(now) else { continue }
 
-            // Dedup: don't fire if we already ran this minute
             if let lastRun = job.lastRun {
                 let lastMinute = cal.dateComponents([.year, .month, .day, .hour, .minute], from: lastRun)
                 let nowMinute = cal.dateComponents([.year, .month, .day, .hour, .minute], from: now)

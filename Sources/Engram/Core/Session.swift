@@ -1,14 +1,14 @@
 import Foundation
 
-/// Session entry stored as one line of JSONL.
-/// Supports tree-based branching: each entry has an id and parent id.
+/// Session entry — lightweight struct for in-memory use.
+/// Persistence is handled by EngramStore (SwiftData).
 public struct SessionEntry: Codable, Sendable {
     public let id: String
     public let parentId: String?
     public let timestamp: Date
     public let role: String
-    public let content: String        // serialized content blocks as JSON
-    public let toolCalls: String?     // serialized tool calls if any
+    public let content: String
+    public let toolCalls: String?
     public let tokenUsage: TokenUsage?
 
     public struct TokenUsage: Codable, Sendable {
@@ -17,18 +17,27 @@ public struct SessionEntry: Codable, Sendable {
     }
 }
 
-/// Manages conversation persistence as JSONL files.
-/// Each session is a single file. Entries form a tree via parent IDs.
+/// Manages conversation persistence via EngramStore.
+/// Falls back to JSONL files if no store is provided.
 public final class SessionManager: @unchecked Sendable {
     public let sessionDir: URL
-    private var currentFile: URL?
+    private var currentSessionId: String?
     private var entries: [SessionEntry] = []
-    private var fileHandle: FileHandle?
     private let lock = NSLock()
+    private let store: EngramStore?
+    private let searchIndex: SessionSearchIndex?
 
-    public init(sessionDir: URL) {
+    // Legacy file-based fields
+    private var currentFile: URL?
+    private var fileHandle: FileHandle?
+
+    public init(sessionDir: URL, store: EngramStore? = nil, searchIndex: SessionSearchIndex? = nil) {
         self.sessionDir = sessionDir
-        try? FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
+        self.store = store
+        self.searchIndex = searchIndex
+        if store == nil {
+            try? FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
+        }
     }
 
     deinit {
@@ -37,21 +46,28 @@ public final class SessionManager: @unchecked Sendable {
 
     // MARK: - Session Lifecycle
 
-    /// Start a new session. Returns the session file path.
     @discardableResult
-    public func newSession() -> URL {
+    public func newSession() -> String {
         lock.lock()
         defer { lock.unlock() }
 
         fileHandle?.closeFile()
         entries = []
 
-        let filename = "session_\(iso8601Now())_\(shortId()).jsonl"
-        let file = sessionDir.appendingPathComponent(filename)
-        FileManager.default.createFile(atPath: file.path, contents: nil)
-        fileHandle = FileHandle(forWritingAtPath: file.path)
-        currentFile = file
-        return file
+        let sessionId = "\(iso8601Now())_\(shortId())"
+        currentSessionId = sessionId
+
+        if let store {
+            Task { await store.createSession(id: sessionId) }
+        } else {
+            let filename = "session_\(sessionId).jsonl"
+            let file = sessionDir.appendingPathComponent(filename)
+            FileManager.default.createFile(atPath: file.path, contents: nil)
+            fileHandle = FileHandle(forWritingAtPath: file.path)
+            currentFile = file
+        }
+
+        return sessionId
     }
 
     /// Resume the most recent session.
@@ -59,46 +75,32 @@ public final class SessionManager: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        guard let latest = listSessionFiles().last else { return false }
-        return loadSession(at: latest)
-    }
-
-    /// Resume a specific session file.
-    @discardableResult
-    public func loadSession(at file: URL) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-
-        fileHandle?.closeFile()
-        entries = []
-
-        guard let data = try? String(contentsOf: file, encoding: .utf8) else { return false }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        for line in data.components(separatedBy: "\n") where !line.isEmpty {
-            if let lineData = line.data(using: .utf8),
-               let entry = try? decoder.decode(SessionEntry.self, from: lineData) {
-                entries.append(entry)
+        if let store {
+            // Get latest session from store
+            var latestId: String?
+            let semaphore = DispatchSemaphore(value: 0)
+            Task {
+                latestId = await store.latestSessionId()
+                semaphore.signal()
             }
-        }
+            semaphore.wait()
 
-        currentFile = file
-        fileHandle = FileHandle(forWritingAtPath: file.path)
-        fileHandle?.seekToEndOfFile()
-        return true
+            guard let id = latestId else { return false }
+            return _loadSessionFromStore(id: id)
+        } else {
+            guard let latest = listSessionFiles().last else { return false }
+            return _loadSessionFromFile(at: latest)
+        }
     }
 
     // MARK: - Append
 
-    /// Append a message to the current session.
     public func append(role: String, content: String, toolCalls: String? = nil,
                        parentId: String? = nil, tokenUsage: SessionEntry.TokenUsage? = nil) -> String {
         lock.lock()
         defer { lock.unlock() }
 
-        if currentFile == nil { _ = _newSessionUnlocked() }
+        if currentSessionId == nil { _ = _newSessionUnlocked() }
 
         let id = shortId()
         let parent = parentId ?? entries.last?.id
@@ -114,36 +116,55 @@ public final class SessionManager: @unchecked Sendable {
         )
 
         entries.append(entry)
-        writeEntry(entry)
+
+        if let store, let sessionId = currentSessionId {
+            let tokIn = tokenUsage?.input
+            let tokOut = tokenUsage?.output
+            Task {
+                await store.appendMessage(sessionId: sessionId, role: role, content: content,
+                                          tokensIn: tokIn, tokensOut: tokOut)
+            }
+        } else {
+            writeEntry(entry)
+        }
+
+        // Index for search
+        if let searchIndex, let sessionId = currentSessionId {
+            let msgId = "\(sessionId):\(entries.count)"
+            searchIndex.addMessage(id: msgId, content: content)
+        }
+
         return id
     }
 
     // MARK: - Read
 
-    /// Get all entries in the current session.
     public var currentEntries: [SessionEntry] {
         lock.lock()
         defer { lock.unlock() }
         return entries
     }
 
-    /// Reconstruct message history from session entries.
     public func messages() -> [Message] {
         lock.lock()
         defer { lock.unlock() }
 
         return entries.compactMap { entry in
             guard let role = Role(rawValue: entry.role) else { return nil }
-            // Content is stored as plain text for simplicity
             return Message(role: role, text: entry.content)
         }
     }
 
-    /// Current session file path.
     public var currentSessionFile: URL? {
         lock.lock()
         defer { lock.unlock() }
         return currentFile
+    }
+
+    public var activeSessionId: String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return currentSessionId
     }
 
     // MARK: - List Sessions
@@ -158,9 +179,27 @@ public final class SessionManager: @unchecked Sendable {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
-    /// Summary of all sessions for display.
     public func listSessions() -> [SessionSummary] {
-        listSessionFiles().compactMap { file in
+        if let store {
+            var results: [(id: String, preview: String?, count: Int, date: Date)] = []
+            let semaphore = DispatchSemaphore(value: 0)
+            Task {
+                results = await store.listSessions()
+                semaphore.signal()
+            }
+            semaphore.wait()
+
+            return results.map { r in
+                SessionSummary(
+                    file: sessionDir.appendingPathComponent(r.id),
+                    messageCount: r.count,
+                    preview: r.preview ?? "",
+                    filename: r.id
+                )
+            }
+        }
+
+        return listSessionFiles().compactMap { file in
             guard let data = try? String(contentsOf: file, encoding: .utf8) else { return nil }
             let lines = data.components(separatedBy: "\n").filter { !$0.isEmpty }
             guard !lines.isEmpty else { return nil }
@@ -168,7 +207,6 @@ public final class SessionManager: @unchecked Sendable {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
 
-            // Get first user message as preview
             var preview = ""
             var messageCount = 0
             for line in lines {
@@ -191,9 +229,6 @@ public final class SessionManager: @unchecked Sendable {
 
     // MARK: - Compaction
 
-    /// Compact the session by summarizing old messages.
-    /// Keeps the first `keepFirst` and last `keepLast` entries,
-    /// replaces the middle with a summary.
     public func compact(keepFirst: Int = 2, keepLast: Int = 4,
                         summarizer: (String) async throws -> String) async throws {
         lock.lock()
@@ -208,12 +243,10 @@ public final class SessionManager: @unchecked Sendable {
         let middleEntries = Array(entries[middleStart..<middleEnd])
         lock.unlock()
 
-        // Build text to summarize
         let text = middleEntries.map { "[\($0.role)] \($0.content)" }.joined(separator: "\n")
         let summary = try await summarizer(text)
 
         lock.lock()
-        // Replace middle with a single summary entry
         let summaryEntry = SessionEntry(
             id: shortId(),
             parentId: entries[middleStart - 1].id,
@@ -226,7 +259,6 @@ public final class SessionManager: @unchecked Sendable {
 
         var newEntries = Array(entries[0..<middleStart])
         newEntries.append(summaryEntry)
-        // Fix parent chain for kept-last entries
         var lastId = summaryEntry.id
         for i in middleEnd..<count {
             let old = entries[i]
@@ -245,25 +277,88 @@ public final class SessionManager: @unchecked Sendable {
 
         entries = newEntries
 
-        // Rewrite file
-        fileHandle?.closeFile()
-        if let file = currentFile {
-            try? rewriteFile(file, entries: entries)
-            fileHandle = FileHandle(forWritingAtPath: file.path)
-            fileHandle?.seekToEndOfFile()
+        // For file-based sessions, rewrite the file
+        if store == nil {
+            fileHandle?.closeFile()
+            if let file = currentFile {
+                try? rewriteFile(file, entries: entries)
+                fileHandle = FileHandle(forWritingAtPath: file.path)
+                fileHandle?.seekToEndOfFile()
+            }
         }
         lock.unlock()
     }
 
     // MARK: - Private
 
-    private func _newSessionUnlocked() -> URL {
-        let filename = "session_\(iso8601Now())_\(shortId()).jsonl"
-        let file = sessionDir.appendingPathComponent(filename)
-        FileManager.default.createFile(atPath: file.path, contents: nil)
-        fileHandle = FileHandle(forWritingAtPath: file.path)
+    private func _newSessionUnlocked() -> String {
+        let sessionId = "\(iso8601Now())_\(shortId())"
+        currentSessionId = sessionId
+
+        if let store {
+            Task { await store.createSession(id: sessionId) }
+        } else {
+            let filename = "session_\(sessionId).jsonl"
+            let file = sessionDir.appendingPathComponent(filename)
+            FileManager.default.createFile(atPath: file.path, contents: nil)
+            fileHandle = FileHandle(forWritingAtPath: file.path)
+            currentFile = file
+        }
+
+        return sessionId
+    }
+
+    private func _loadSessionFromStore(id: String) -> Bool {
+        currentSessionId = id
+        entries = []
+
+        var msgs: [(role: String, content: String, tokensIn: Int?, tokensOut: Int?, timestamp: Date)] = []
+        let semaphore = DispatchSemaphore(value: 0)
+        Task {
+            msgs = await store!.loadMessages(sessionId: id)
+            semaphore.signal()
+        }
+        semaphore.wait()
+
+        for (i, msg) in msgs.enumerated() {
+            let entry = SessionEntry(
+                id: shortId(),
+                parentId: i > 0 ? entries[i - 1].id : nil,
+                timestamp: msg.timestamp,
+                role: msg.role,
+                content: msg.content,
+                toolCalls: nil,
+                tokenUsage: msg.tokensIn != nil ? SessionEntry.TokenUsage(input: msg.tokensIn!, output: msg.tokensOut ?? 0) : nil
+            )
+            entries.append(entry)
+        }
+        return !entries.isEmpty
+    }
+
+    @discardableResult
+    private func _loadSessionFromFile(at file: URL) -> Bool {
+        fileHandle?.closeFile()
+        entries = []
+
+        guard let data = try? String(contentsOf: file, encoding: .utf8) else { return false }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        for line in data.components(separatedBy: "\n") where !line.isEmpty {
+            if let lineData = line.data(using: .utf8),
+               let entry = try? decoder.decode(SessionEntry.self, from: lineData) {
+                entries.append(entry)
+            }
+        }
+
         currentFile = file
-        return file
+        // Extract session ID from filename
+        let name = file.deletingPathExtension().lastPathComponent
+        currentSessionId = name.hasPrefix("session_") ? String(name.dropFirst(8)) : name
+        fileHandle = FileHandle(forWritingAtPath: file.path)
+        fileHandle?.seekToEndOfFile()
+        return true
     }
 
     private func writeEntry(_ entry: SessionEntry) {

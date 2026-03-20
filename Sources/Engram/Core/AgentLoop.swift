@@ -19,16 +19,20 @@ public actor AgentLoop {
     private var totalCacheWrite = 0
     private var agentsContext: String
 
+    private let store: EngramStore?
+
     public init(client: LLMClient, registry: ToolRegistry, shelf: Shelf,
                 config: AgentConfig, session: SessionManager,
                 skillLoader: SkillLoader = SkillLoader(),
-                platformHint: String? = nil) {
+                platformHint: String? = nil,
+                store: EngramStore? = nil) {
         self.client = client
         self.registry = registry
         self.shelf = shelf
         self.skillLoader = skillLoader
         self.config = config
         self.session = session
+        self.store = store
         self.context = ContextManager(
             maxContextTokens: config.contextWindow,
             compactionThreshold: 0.5
@@ -48,7 +52,7 @@ public actor AgentLoop {
         // On first turn, inject identity context
         if history.isEmpty && needsPreambleHack {
             let ctx = ContextBuilder.buildContextBlock(
-                shelf: shelf, skillLoader: skillLoader,
+                store: store, shelf: shelf, skillLoader: skillLoader,
                 agentsContext: agentsContext, platformHint: platformHint
             )
             if !ctx.isEmpty {

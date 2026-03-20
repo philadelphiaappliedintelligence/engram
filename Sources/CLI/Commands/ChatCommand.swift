@@ -18,6 +18,21 @@ struct Chat: AsyncParsableCommand {
         var config = AgentConfig.load()
         if let model { config.model = model }
 
+        // Initialize SwiftData store
+        let container = try EngramStore.makeContainer()
+        let store = EngramStore(modelContainer: container)
+
+        // Seed default identities on first boot
+        await AgentConfig.ensureDefaultIdentities(store: store)
+
+        // FDA check (interactive only)
+        if message.isEmpty {
+            await AgentConfig.promptFDAIfNeeded(store: store)
+        }
+
+        // SearchKit index
+        let searchIndex = SessionSearchIndex()
+
         let oauth = OAuthClient()
         let openaiOAuth = OpenAIOAuth()
         let resolvedKey: String?
@@ -35,18 +50,19 @@ struct Chat: AsyncParsableCommand {
             apiKey: apiKey, baseURL: config.resolvedBaseURL,
             provider: config.resolvedProvider, oauth: oauth
         )
-        let shelf = Shelf(saveDir: config.memoryURL)
+        let shelf = Shelf(saveDir: config.memoryURL, store: store)
         shelf.loadAll()
-        let sessionMgr = SessionManager(sessionDir: config.sessionURL)
+        let sessionMgr = SessionManager(sessionDir: config.sessionURL, store: store, searchIndex: searchIndex)
         let skillLoader = SkillLoader(); skillLoader.loadAll()
-        let cronStore = CronStore(storeDir: AgentConfig.configDir.appendingPathComponent("cron"))
+        let cronStore = CronStore(storeDir: AgentConfig.configDir.appendingPathComponent("cron"), store: store)
         cronStore.load()
 
         let registry = ToolRegistry()
         let sessionId = UUID().uuidString
         registry.register(ToolSet.standard(
             shelf: shelf, sessionId: sessionId, client: client,
-            config: config, skillLoader: skillLoader, cronStore: cronStore
+            config: config, skillLoader: skillLoader, cronStore: cronStore,
+            store: store, searchIndex: searchIndex
         ))
 
         let mcpManager = MCPManager()
@@ -57,13 +73,14 @@ struct Chat: AsyncParsableCommand {
 
         if resume {
             if sessionMgr.resumeLatest() {
-                print("\(TUI.dim)Resumed: \(sessionMgr.currentSessionFile?.lastPathComponent ?? "")\(TUI.reset)")
+                print("\(TUI.dim)Resumed: \(sessionMgr.activeSessionId ?? "")\(TUI.reset)")
             } else { sessionMgr.newSession() }
         } else { sessionMgr.newSession() }
 
         let agent = AgentLoop(
             client: client, registry: registry, shelf: shelf,
-            config: config, session: sessionMgr, skillLoader: skillLoader
+            config: config, session: sessionMgr, skillLoader: skillLoader,
+            store: store
         )
         if resume { await agent.resumeSession() }
 
@@ -83,7 +100,7 @@ struct Chat: AsyncParsableCommand {
             return
         }
 
-        // ─── Interactive mode: Raw Terminal TUI ───
+        // --- Interactive mode: Raw Terminal TUI ---
 
         let term = RawTerminal()
 
@@ -179,7 +196,7 @@ struct Chat: AsyncParsableCommand {
                 continue
             }
 
-            // ─── Chat message ───
+            // --- Chat message ---
 
             // Clear input and show user message in chat
             term.clearInput()

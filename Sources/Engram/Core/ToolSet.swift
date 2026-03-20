@@ -11,6 +11,8 @@ public enum ToolSet {
         config: AgentConfig = AgentConfig.load(),
         skillLoader: SkillLoader = SkillLoader(),
         cronStore: CronStore? = nil,
+        store: EngramStore? = nil,
+        searchIndex: SessionSearchIndex? = nil,
         platform: (any Platform)? = nil,
         chatId: String? = nil
     ) -> [any Tool] {
@@ -54,9 +56,6 @@ public enum ToolSet {
             // Code execution
             ExecuteCodeTool(),
 
-            // Session search (FTS5)
-            SessionSearchTool(sessionDir: AgentConfig.configDir.appendingPathComponent("sessions")),
-
             // Subagent delegation
             DelegateTool(client: client, shelf: shelf, config: config),
 
@@ -68,6 +67,21 @@ public enum ToolSet {
                 loader: skillLoader
             ),
         ]
+
+        // Session search (SearchKit if available, else FTS5 fallback)
+        if let searchIndex {
+            tools.append(SearchKitSessionSearchTool(searchIndex: searchIndex))
+        } else {
+            tools.append(SessionSearchTool(sessionDir: AgentConfig.configDir.appendingPathComponent("sessions")))
+        }
+
+        // Identity tools (store-backed)
+        if let store {
+            tools.append(contentsOf: [
+                IdentityReadTool(store: store),
+                IdentityEditTool(store: store),
+            ] as [any Tool])
+        }
 
         // Cron (if store provided)
         if let cronStore {

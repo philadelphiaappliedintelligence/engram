@@ -31,9 +31,11 @@ public struct OAuthCredentials: Codable, Sendable {
 /// reading existing Claude Code credentials from the macOS Keychain.
 public final class OAuthClient: @unchecked Sendable {
     private let credFile: URL
+    private let keychain: KeychainStore
 
     public init() {
         self.credFile = AgentConfig.configDir.appendingPathComponent("oauth.json")
+        self.keychain = KeychainStore()
     }
 
     // MARK: - Login Flow (OAuth Authorization Code + PKCE)
@@ -304,26 +306,26 @@ public final class OAuthClient: @unchecked Sendable {
         SecItemUpdate(updateQuery as CFDictionary, updateAttrs as CFDictionary)
     }
 
-    // MARK: - Credential Storage
+    // MARK: - Credential Storage (Keychain-backed with JSON file fallback)
 
     public func loadCredentials() -> OAuthCredentials? {
+        // Try Keychain first
+        if let creds = keychain.getJSON(KeychainStore.anthropicOAuth, as: OAuthCredentials.self) {
+            return creds
+        }
+        // Fallback: read from legacy JSON file and migrate to Keychain
         guard let data = try? Data(contentsOf: credFile) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .secondsSince1970
-        return try? decoder.decode(OAuthCredentials.self, from: data)
+        guard let creds = try? decoder.decode(OAuthCredentials.self, from: data) else { return nil }
+        // Migrate to Keychain
+        keychain.setJSON(KeychainStore.anthropicOAuth, value: creds)
+        try? FileManager.default.removeItem(at: credFile)
+        return creds
     }
 
     private func saveCredentials(_ creds: OAuthCredentials) throws {
-        try FileManager.default.createDirectory(
-            at: credFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-        encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(creds)
-        try data.write(to: credFile, options: .atomic)
-        // Restrictive permissions
-        try FileManager.default.setAttributes(
-            [.posixPermissions: 0o600], ofItemAtPath: credFile.path)
+        keychain.setJSON(KeychainStore.anthropicOAuth, value: creds)
     }
 
     // MARK: - Parse Token Response

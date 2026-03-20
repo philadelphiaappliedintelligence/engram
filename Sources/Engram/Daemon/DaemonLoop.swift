@@ -7,18 +7,22 @@ public actor DaemonLoop {
     private let shelf: Shelf
     private let cronStore: CronStore
     private let scheduler: CronScheduler
+    private let store: EngramStore
+    private let searchIndex: SessionSearchIndex
     private var platforms: [any Platform] = []
     private var chatSessions: [String: (agent: AgentLoop, lastActive: Date)] = [:]
     private var isRunning = false
     private let sessionMaxIdle: TimeInterval = 3600  // evict after 1 hour
     private let heartbeatInterval: TimeInterval = 60
 
-    public init(config: AgentConfig) {
+    public init(config: AgentConfig, store: EngramStore) {
         self.config = config
-        self.shelf = Shelf(saveDir: config.memoryURL)
+        self.store = store
+        self.searchIndex = SessionSearchIndex()
+        self.shelf = Shelf(saveDir: config.memoryURL, store: store)
 
         let cronDir = AgentConfig.configDir.appendingPathComponent("cron")
-        self.cronStore = CronStore(storeDir: cronDir)
+        self.cronStore = CronStore(storeDir: cronDir, store: store)
         self.scheduler = CronScheduler(store: cronStore)
     }
 
@@ -27,6 +31,7 @@ public actor DaemonLoop {
 
         shelf.loadAll()
         cronStore.load()
+        await AgentConfig.ensureDefaultIdentities(store: store)
         isRunning = true
 
         log("Loaded \(shelf.nuggetNames.count) nuggets, \(cronStore.allJobs.count) cron jobs")
@@ -198,7 +203,6 @@ public actor DaemonLoop {
 
     private func handleGatewayMessage(text: String, chatId: String, sender: String,
                                        platform: any Platform) async {
-        // Reuse existing agent session for this chat, or create one
         let sessionKey = "\(platform.name):\(chatId)"
         let agent: AgentLoop
 
@@ -218,24 +222,24 @@ public actor DaemonLoop {
                 provider: config.resolvedProvider
             )
             let registry = ToolRegistry()
-            let sessionMgr = SessionManager(sessionDir: config.sessionURL)
+            let sessionMgr = SessionManager(sessionDir: config.sessionURL, store: store, searchIndex: searchIndex)
             sessionMgr.newSession()
 
             registry.register(ToolSet.standard(
                 shelf: shelf, sessionId: sessionKey, client: client,
+                store: store, searchIndex: searchIndex,
                 platform: platform, chatId: chatId
             ))
 
             agent = AgentLoop(
                 client: client, registry: registry, shelf: shelf,
                 config: config, session: sessionMgr,
-                platformHint: platform.name
+                platformHint: platform.name, store: store
             )
             chatSessions[sessionKey] = (agent: agent, lastActive: Date())
         }
 
         do {
-            // Show typing indicator
             try? await platform.sendTyping(to: chatId)
 
             let response = try await agent.run(input: text)
@@ -253,10 +257,9 @@ public actor DaemonLoop {
 
     // MARK: - Memory Consolidation
 
-    /// Periodically ask the agent to review and consolidate memory.
     private func consolidateMemory() async {
         let facts = shelf.status().reduce(0) { $0 + $1.factCount }
-        guard facts > 10 else { return }  // Only consolidate if there's meaningful data
+        guard facts > 10 else { return }
 
         let oauthToken = await resolveOAuthToken()
         guard let apiKey = config.resolvedAPIKey() ?? oauthToken else { return }
@@ -268,16 +271,17 @@ public actor DaemonLoop {
             provider: config.resolvedProvider
         )
         let registry = ToolRegistry()
-        let sessionMgr = SessionManager(sessionDir: config.sessionURL)
+        let sessionMgr = SessionManager(sessionDir: config.sessionURL, store: store, searchIndex: searchIndex)
         sessionMgr.newSession()
 
         registry.register(ToolSet.standard(
-            shelf: shelf, sessionId: "consolidation", client: client
+            shelf: shelf, sessionId: "consolidation", client: client,
+            store: store, searchIndex: searchIndex
         ))
 
         let agent = AgentLoop(
             client: client, registry: registry, shelf: shelf,
-            config: config, session: sessionMgr
+            config: config, session: sessionMgr, store: store
         )
 
         do {
@@ -286,7 +290,6 @@ public actor DaemonLoop {
             - Duplicate or redundant facts that can be merged
             - Outdated information that should be forgotten
             - Important patterns worth noting as new facts
-            - USER.md fields that should be updated based on what you know
             Do this silently. Do not output anything unless you find issues.
             """)
             log("Memory consolidation complete")
@@ -309,7 +312,7 @@ public actor DaemonLoop {
     // MARK: - Platform Reconnection
 
     private func reconnectPlatforms() async {
-        for (i, platform) in platforms.enumerated() {
+        for platform in platforms {
             if !platform.isConnected {
                 log("[\(platform.name)] Disconnected, reconnecting...")
                 do {
@@ -338,16 +341,17 @@ public actor DaemonLoop {
             provider: config.resolvedProvider
         )
         let registry = ToolRegistry()
-        let sessionMgr = SessionManager(sessionDir: config.sessionURL)
+        let sessionMgr = SessionManager(sessionDir: config.sessionURL, store: store, searchIndex: searchIndex)
         sessionMgr.newSession()
 
         registry.register(ToolSet.standard(
-            shelf: shelf, sessionId: UUID().uuidString, client: client
+            shelf: shelf, sessionId: UUID().uuidString, client: client,
+            store: store, searchIndex: searchIndex
         ))
 
         let agent = AgentLoop(
             client: client, registry: registry, shelf: shelf,
-            config: config, session: sessionMgr
+            config: config, session: sessionMgr, store: store
         )
 
         do {

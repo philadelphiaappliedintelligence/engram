@@ -165,6 +165,18 @@ public final class Nugget: Sendable {
         _memory.withLock { $0 = mem }
     }
 
+    // MARK: - Bulk Load (for store-backed persistence)
+
+    /// Load a fact without triggering HRR rebuild for each one.
+    /// Call rebuild() after loading all facts.
+    public func _loadFact(key: String, value: String, hits: Int, lastHitSession: String?) {
+        _facts.withLock { $0.append(Fact(key: key, value: value, hits: hits, lastHitSession: lastHitSession)) }
+        let keyVec = vector(for: "key:\(key)")
+        let valVec = vector(for: "val:\(value)")
+        let binding = keyVec.bind(with: valVec)
+        _memory.withLock { $0 = $0.add(binding) }
+    }
+
     // MARK: - Accessors
 
     public var facts: [Fact] {

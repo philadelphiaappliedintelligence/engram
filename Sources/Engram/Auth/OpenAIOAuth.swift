@@ -11,9 +11,11 @@ public final class OpenAIOAuth {
     private static let deviceAuthPage = "https://auth.openai.com/codex/device"
 
     private let credFile: URL
+    private let keychain: KeychainStore
 
     public init() {
         self.credFile = AgentConfig.configDir.appendingPathComponent("openai_oauth.json")
+        self.keychain = KeychainStore()
     }
 
     // MARK: - Device Code Login
@@ -205,25 +207,26 @@ public final class OpenAIOAuth {
         return nil
     }
 
-    // MARK: - Persistence
+    // MARK: - Persistence (Keychain-backed with JSON file fallback)
 
     public func loadCredentials() -> OpenAICredentials? {
+        // Try Keychain first
+        if let creds = keychain.getJSON(KeychainStore.openaiOAuth, as: OpenAICredentials.self) {
+            return creds
+        }
+        // Fallback: read from legacy JSON file and migrate to Keychain
         guard let data = try? Data(contentsOf: credFile) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .secondsSince1970
-        return try? decoder.decode(OpenAICredentials.self, from: data)
+        guard let creds = try? decoder.decode(OpenAICredentials.self, from: data) else { return nil }
+        // Migrate to Keychain
+        keychain.setJSON(KeychainStore.openaiOAuth, value: creds)
+        try? FileManager.default.removeItem(at: credFile)
+        return creds
     }
 
     private func saveCredentials(_ creds: OpenAICredentials) throws {
-        try FileManager.default.createDirectory(
-            at: credFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-        encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(creds)
-        try data.write(to: credFile, options: .atomic)
-        try FileManager.default.setAttributes(
-            [.posixPermissions: 0o600], ofItemAtPath: credFile.path)
+        keychain.setJSON(KeychainStore.openaiOAuth, value: creds)
     }
 }
 
