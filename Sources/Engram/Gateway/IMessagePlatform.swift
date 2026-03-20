@@ -68,32 +68,37 @@ public actor IMessagePlatform: Platform {
     // MARK: - Send via AppleScript
 
     public func sendMessage(_ text: String, to chatId: String) async throws {
-        let escaped = text
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        let phoneEscaped = chatId
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-
         let script = """
-        tell application "Messages"
-            set targetBuddy to "\(phoneEscaped)"
-            set targetService to 1st account whose service type = iMessage
-            set theBuddy to participant targetBuddy of targetService
-            send "\(escaped)" to theBuddy
-        end tell
+        on run argv
+            set theRecipient to item 1 of argv
+            set theMessage to item 2 of argv
+            tell application "Messages"
+                set targetService to first service whose service type is iMessage
+                set targetBuddy to buddy theRecipient of targetService
+                send theMessage to targetBuddy
+            end tell
+        end run
         """
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", script]
+        process.arguments = ["-l", "AppleScript", "-", chatId, text]
+        let stdinPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardInput = stdinPipe
         process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        process.standardError = stderrPipe
         try process.run()
+        if let data = script.data(using: .utf8) {
+            stdinPipe.fileHandleForWriting.write(data)
+        }
+        stdinPipe.fileHandleForWriting.closeFile()
         process.waitUntilExit()
 
         if process.terminationStatus != 0 {
-            throw GatewayError.sendFailed("osascript exit \(process.terminationStatus)")
+            let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            let errMsg = String(data: errData, encoding: .utf8) ?? ""
+            throw GatewayError.sendFailed("osascript: \(errMsg)")
         }
 
         // Mark as read after sending
@@ -102,37 +107,60 @@ public actor IMessagePlatform: Platform {
         }
     }
 
-    // MARK: - Send File via AppleScript
+    // MARK: - Send File via AppleScript (imsg-plus approach)
 
     public func sendFile(path: String, caption: String?, to chatId: String) async throws {
-        let phoneEscaped = chatId
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
+        // Stage the file into Messages.app's Attachments directory
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser
+        let attachDir = home.appendingPathComponent("Library/Messages/Attachments/engram/\(UUID().uuidString)")
+        try fm.createDirectory(at: attachDir, withIntermediateDirectories: true)
+        let filename = URL(fileURLWithPath: path).lastPathComponent
+        let stagedPath = attachDir.appendingPathComponent(filename).path
+        try fm.copyItem(atPath: path, toPath: stagedPath)
 
-        if let caption, !caption.isEmpty {
-            try await sendMessage(caption, to: chatId)
-        }
-
+        // Send via osascript with stdin + argv (matches imsg-plus approach)
         let script = """
-        tell application "Messages"
-            set targetBuddy to "\(phoneEscaped)"
-            set targetService to 1st account whose service type = iMessage
-            set theBuddy to participant targetBuddy of targetService
-            set theFile to POSIX file "\(path)" as alias
-            send theFile to theBuddy
-        end tell
+        on run argv
+            set theRecipient to item 1 of argv
+            set theMessage to item 2 of argv
+            set theFilePath to item 3 of argv
+            set useAttachment to item 4 of argv
+
+            tell application "Messages"
+                set targetService to first service whose service type is iMessage
+                set targetBuddy to buddy theRecipient of targetService
+                if theMessage is not "" then
+                    send theMessage to targetBuddy
+                end if
+                if useAttachment is "1" then
+                    set theFile to POSIX file theFilePath as alias
+                    send theFile to targetBuddy
+                end if
+            end tell
+        end run
         """
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", script]
+        process.arguments = ["-l", "AppleScript", "-",
+                             chatId, caption ?? "", stagedPath, "1"]
+        let stdinPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardInput = stdinPipe
         process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        process.standardError = stderrPipe
         try process.run()
+        if let data = script.data(using: .utf8) {
+            stdinPipe.fileHandleForWriting.write(data)
+        }
+        stdinPipe.fileHandleForWriting.closeFile()
         process.waitUntilExit()
 
         if process.terminationStatus != 0 {
-            throw GatewayError.sendFailed("File send osascript exit \(process.terminationStatus)")
+            let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            let errMsg = String(data: errData, encoding: .utf8) ?? ""
+            throw GatewayError.sendFailed("File send failed: \(errMsg)")
         }
     }
 
