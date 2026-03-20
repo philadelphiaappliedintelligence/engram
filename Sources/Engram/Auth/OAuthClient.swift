@@ -182,8 +182,8 @@ public final class OAuthClient: @unchecked Sendable {
             }
         }
 
-        // 2. Claude Code Keychain — read token, refresh if expired
-        if let keychainResult = readClaudeCodeKeychainFull() {
+        // 2. Claude Code Keychain — only in interactive context
+        if isatty(STDIN_FILENO) != 0, let keychainResult = readClaudeCodeKeychainFull() {
             if !keychainResult.isExpired {
                 return keychainResult.accessToken
             }
@@ -317,9 +317,9 @@ public final class OAuthClient: @unchecked Sendable {
                 return creds
             }
         }
-        // Fallback: Keychain (may block in daemon context, but works in interactive)
-        if let creds = keychain.getJSON(KeychainStore.anthropicOAuth, as: OAuthCredentials.self) {
-            // Write to file so daemon can access it next time
+        // Fallback: Keychain (only in interactive context to avoid GUI prompts)
+        if isatty(STDIN_FILENO) != 0,
+           let creds = keychain.getJSON(KeychainStore.anthropicOAuth, as: OAuthCredentials.self) {
             try? saveToFile(creds)
             return creds
         }
@@ -327,10 +327,12 @@ public final class OAuthClient: @unchecked Sendable {
     }
 
     private func saveCredentials(_ creds: OAuthCredentials) throws {
-        // Always write to file (daemon-accessible)
+        // Always write to file (daemon-accessible, no GUI prompts)
         try saveToFile(creds)
-        // Also write to Keychain (interactive sessions)
-        keychain.setJSON(KeychainStore.anthropicOAuth, value: creds)
+        // Only write to Keychain if running interactively (has a terminal)
+        if isatty(STDIN_FILENO) != 0 {
+            keychain.setJSON(KeychainStore.anthropicOAuth, value: creds)
+        }
     }
 
     private func saveToFile(_ creds: OAuthCredentials) throws {

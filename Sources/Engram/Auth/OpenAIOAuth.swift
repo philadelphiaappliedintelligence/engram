@@ -217,7 +217,8 @@ public final class OpenAIOAuth {
                 return creds
             }
         }
-        if let creds = keychain.getJSON(KeychainStore.openaiOAuth, as: OpenAICredentials.self) {
+        if isatty(STDIN_FILENO) != 0,
+           let creds = keychain.getJSON(KeychainStore.openaiOAuth, as: OpenAICredentials.self) {
             try? saveToFile(creds)
             return creds
         }
@@ -226,7 +227,9 @@ public final class OpenAIOAuth {
 
     private func saveCredentials(_ creds: OpenAICredentials) throws {
         try saveToFile(creds)
-        keychain.setJSON(KeychainStore.openaiOAuth, value: creds)
+        if isatty(STDIN_FILENO) != 0 {
+            keychain.setJSON(KeychainStore.openaiOAuth, value: creds)
+        }
     }
 
     private func saveToFile(_ creds: OpenAICredentials) throws {
