@@ -244,8 +244,13 @@ public actor DaemonLoop {
         do {
             try? await platform.sendTyping(to: chatId)
 
-            let response = try await agent.run(input: text)
-            log("[\(platform.name)] Response: \(String(response.prefix(80)))")
+            let t0 = Date()
+            let response = try await agent.run(input: text, onToolCall: { [weak self] name, _ in
+                guard let self else { return }
+                Task { await self.log("[\(platform.name)] tool: \(name)") }
+            })
+            let elapsed = String(format: "%.1f", Date().timeIntervalSince(t0))
+            log("[\(platform.name)] Response (\(elapsed)s): \(String(response.prefix(80)))")
             try await platform.sendMessage(response, to: chatId)
         } catch {
             log("[\(platform.name)] Error: \(error.localizedDescription)")
