@@ -85,7 +85,7 @@ engram daemon logs       Tail daemon output
 
 ## Memory
 
-Engram uses [Holographic Reduced Representations](https://en.wikipedia.org/wiki/Holographic_Reduced_Representation) — a model from cognitive science where information is encoded by binding key-value pairs into complex vectors and superposing them.
+Engram uses Holographic Reduced Representations (HRR) — a model from cognitive science originally described by Tony Plate in his 1995 paper *[Holographic Reduced Representations](https://ieeexplore.ieee.org/document/377968)*. Information is encoded by binding key-value pairs into complex vectors and superposing them.
 
 ```
 remember("favorite_color", "black")
