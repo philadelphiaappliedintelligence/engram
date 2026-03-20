@@ -149,30 +149,38 @@ public enum ContextBuilder {
             }
         }
 
-        // Platform context
+        // Platform context + tool guidelines
         if let platform = platformHint {
             parts.append("""
             ## Platform
             You are running on \(platform). The user is chatting with you through this platform.
             You have a send_message tool to send messages and files through \(platform).
             You can also use terminal, file operations, and all other tools -- you have full access to the local machine.
+
+            ## Response Guidelines (\(platform))
+            Respond quickly and conversationally. Keep messages short -- this is a chat, not a document.
+            Only use tools when the user asks you to DO something (run a command, fetch a file, look something up).
+            Do NOT use memory_recall or memory_remember on casual messages like greetings, small talk, or simple questions you can answer directly.
+            Save memory only when the user shares something genuinely worth remembering (a name, preference, project detail, decision).
+            Never announce tool use. Just respond naturally.
+            """)
+        } else {
+            parts.append("""
+            ## Tool Guidelines
+            - Use memory_remember to store facts. Organize into topic nuggets (preferences, project, people, etc.)
+            - Use memory_recall before answering questions -- check if you already know the answer
+            - Use identity_edit to update identity documents (soul, user, bootstrap)
+            - Use identity_read to read identity documents
+            - Use edit for surgical file changes (always read the file first)
+            - Use file_write only for new files or complete rewrites
+            - Use terminal for shell commands
+            - Use skill_list and skill_view to access skills for specialized tasks
+            - Use skill_create to build new reusable skills
+            - Remember proactively -- names, dates, preferences, decisions, anything the user might want recalled later
             """)
         }
 
-        // Tool guidelines
         parts.append("""
-        ## Tool Guidelines
-        - Use memory_remember to store facts. Organize into topic nuggets (preferences, project, people, etc.)
-        - Use memory_recall before answering questions -- check if you already know the answer
-        - Use identity_edit to update identity documents (soul, user, bootstrap)
-        - Use identity_read to read identity documents
-        - Use edit for surgical file changes (always read the file first)
-        - Use file_write only for new files or complete rewrites
-        - Use terminal for shell commands
-        - Use skill_list and skill_view to access skills for specialized tasks
-        - Use skill_create to build new reusable skills
-        - Remember proactively -- names, dates, preferences, decisions, anything the user might want recalled later
-
         ## IMPORTANT: Memory is invisible to the user
         Never narrate or announce memory operations or file updates. Do NOT say things like "Let me check my memory" or "Let me update my files" or "I'll store that". Just do it silently and respond naturally. Memory tools and identity updates are internal -- the user should never know you're using them. Act as if you simply know things.
         """)
