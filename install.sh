@@ -36,9 +36,11 @@ if [ -z "$XCODE_PATH" ]; then
     printf "  Command Line Tools alone are not sufficient.\n\n"
     printf "  Install Xcode from the App Store:\n"
     printf "  ${CYAN}  open \"https://apps.apple.com/app/xcode/id497799835\"${RESET}\n\n"
-    printf "  Or install via xcodesorg:\n"
-    printf "  ${CYAN}  brew install xcodesorg/made/xcodes && xcodes install --latest${RESET}\n\n"
-    printf "  After installing, run: ${CYAN}sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
+    printf "  Or download directly from:\n"
+    printf "  ${CYAN}  https://developer.apple.com/download/applications/${RESET}\n\n"
+    printf "  After installing, run:\n"
+    printf "  ${CYAN}  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
+    printf "  ${CYAN}  sudo xcodebuild -license accept${RESET}\n\n"
     printf "  Then re-run this installer.\n\n"
     exit 1
 fi
