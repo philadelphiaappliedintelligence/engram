@@ -79,9 +79,13 @@ public struct EmailConfig: Codable, Sendable {
 
 public struct IMessageConfig: Codable, Sendable {
     public var enabled: Bool
+    public var allowedHandles: [String]?  // phone numbers or emails; nil = allow all
+    public var enableIMCore: Bool?        // use typing/read/tapback if SIP disabled
 
-    public init() {
+    public init(allowedHandles: [String]? = nil, enableIMCore: Bool? = true) {
         self.enabled = true
+        self.allowedHandles = allowedHandles
+        self.enableIMCore = enableIMCore
     }
 }
 

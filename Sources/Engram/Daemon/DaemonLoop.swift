@@ -172,11 +172,12 @@ public actor DaemonLoop {
         }
 
         if let im = gw.imessage, im.enabled {
-            let platform = IMessagePlatform()
+            let platform = IMessagePlatform(config: im)
             do {
                 try await platform.start()
                 platforms.append(platform)
-                log("iMessage: connected")
+                let advanced = await platform.advancedFeaturesAvailable
+                log("iMessage: connected\(advanced ? " (typing/read/tapback enabled)" : "")")
             } catch {
                 log("iMessage: failed — \(error.localizedDescription)")
             }

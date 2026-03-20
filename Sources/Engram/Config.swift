@@ -138,6 +138,10 @@ public struct AgentConfig: Codable, Sendable {
     public static func promptFDAIfNeeded(store: EngramStore) async {
         // Check if we already prompted
         if let status = await store.getConfig("fda_prompted"), status == "true" {
+            // Re-check if FDA was granted since last prompt
+            if checkFullDiskAccess() {
+                await store.setConfig("fda_status", value: "granted")
+            }
             return
         }
 
@@ -147,23 +151,45 @@ public struct AgentConfig: Codable, Sendable {
             return
         }
 
+        let engramPath = ProcessInfo.processInfo.arguments.first ?? "/usr/local/bin/engram"
+
         print("""
 
-        Engram needs Full Disk Access for calendar, contacts, and iMessage.
+        Engram needs Full Disk Access for iMessage, calendar, and contacts.
 
-          1. Open System Settings
-          2. Privacy & Security > Full Disk Access
-          3. Add: ~/bin/engram
-          4. Restart engram
+          The binary to add: \(engramPath)
 
-        Skip for now? (y/N)\(" ")
-        """)
+        Open System Settings now? (Y/n)\(" ")
+        """, terminator: "")
 
-        if let input = readLine()?.trimmingCharacters(in: .whitespaces).lowercased(),
-           input == "y" || input == "yes" {
-            await store.setConfig("fda_status", value: "skipped")
+        let input = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+
+        if input.isEmpty || input == "y" || input == "yes" {
+            // Open System Settings to Full Disk Access pane
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = ["x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"]
+            try? process.run()
+            process.waitUntilExit()
+
+            print("""
+
+              1. Click + and add: \(engramPath)
+              2. Restart engram
+
+            Press Enter when done...\(" ")
+            """, terminator: "")
+            _ = readLine()
+
+            if checkFullDiskAccess() {
+                await store.setConfig("fda_status", value: "granted")
+                print("  Full Disk Access granted.\n")
+            } else {
+                await store.setConfig("fda_status", value: "pending")
+                print("  Not yet granted — some features will be limited.\n")
+            }
         } else {
-            await store.setConfig("fda_status", value: "pending")
+            await store.setConfig("fda_status", value: "skipped")
         }
         await store.setConfig("fda_prompted", value: "true")
     }

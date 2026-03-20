@@ -1,7 +1,5 @@
 #!/bin/zsh
-# Engram — One-line installer
 # curl -fsSL https://raw.githubusercontent.com/philadelphiaappliedintelligence/engram/main/install.sh | sh
-
 set -e
 
 BOLD='\033[1m'
@@ -13,100 +11,63 @@ YELLOW='\033[33m'
 RESET='\033[0m'
 
 REPO="https://github.com/philadelphiaappliedintelligence/engram.git"
-INSTALL_DIR="$HOME/bin"
+INSTALL_DIR="/usr/local/bin"
 BUILD_DIR="$HOME/.engram-build"
 
-clear
-printf "\n"
-printf "${BOLD}  ╔══════════════════════════════════════╗${RESET}\n"
-printf "${BOLD}  ║            ${CYAN}E N G R A M${RESET}${BOLD}               ║${RESET}\n"
-printf "${BOLD}  ║   ${DIM}AI agent with holographic memory${RESET}${BOLD}   ║${RESET}\n"
-printf "${BOLD}  ╚══════════════════════════════════════╝${RESET}\n"
-printf "\n"
+printf "\n  ${BOLD}engram${RESET} ${DIM}— AI agent with holographic memory${RESET}\n\n"
 
-if [ "$(uname)" != "Darwin" ]; then
-    printf "${RED}  Engram requires macOS.${RESET}\n"; exit 1
-fi
+[ "$(uname)" != "Darwin" ] && printf "${RED}  macOS required.${RESET}\n" && exit 1
 
-# Xcode.app is required (not just Command Line Tools)
-# SwiftData macros and SearchKit need the full Xcode toolchain
+# Require Xcode.app (SwiftData macros need the full toolchain)
 XCODE_PATH=$(xcode-select -p 2>/dev/null || echo "")
 
 if [ -z "$XCODE_PATH" ] || [[ "$XCODE_PATH" == */CommandLineTools* ]]; then
     printf "${YELLOW}  Xcode.app required${RESET}\n\n"
-
-    if [[ "$XCODE_PATH" == */CommandLineTools* ]]; then
-        printf "  Your system is using Command Line Tools:\n"
-        printf "  ${DIM}  $XCODE_PATH${RESET}\n\n"
-    fi
-
-    printf "  Engram uses SwiftData and SearchKit which require the full Xcode toolchain.\n\n"
-
     if [ -d "/Applications/Xcode.app" ]; then
-        printf "  Xcode.app is installed but not selected. Run:\n\n"
-        printf "  ${CYAN}  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
-        printf "  ${CYAN}  sudo xcodebuild -license accept${RESET}\n\n"
+        printf "  Xcode is installed but not selected:\n"
+        printf "  ${CYAN}sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
+        printf "  ${CYAN}sudo xcodebuild -license accept${RESET}\n\n"
     else
-        printf "  ${BOLD}Option 1:${RESET} App Store\n"
-        printf "  ${CYAN}  open \"https://apps.apple.com/app/xcode/id497799835\"${RESET}\n\n"
-        printf "  ${BOLD}Option 2:${RESET} Download .xip from Apple Developer\n"
-        printf "  ${CYAN}  https://developer.apple.com/download/applications/${RESET}\n"
-        printf "  ${DIM}  xip -x Xcode*.xip && mv Xcode.app /Applications/${RESET}\n\n"
-        printf "  ${BOLD}Option 3:${RESET} Transfer from another Mac\n"
-        printf "  ${DIM}  scp ~/Downloads/Xcode*.xip user@this-mac:~/${RESET}\n"
-        printf "  ${DIM}  xip -x ~/Xcode*.xip && mv ~/Xcode.app /Applications/${RESET}\n\n"
-        printf "  Then run:\n\n"
-        printf "  ${CYAN}  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
-        printf "  ${CYAN}  sudo xcodebuild -license accept${RESET}\n\n"
+        printf "  ${BOLD}App Store:${RESET}  ${CYAN}open \"https://apps.apple.com/app/xcode/id497799835\"${RESET}\n"
+        printf "  ${BOLD}Direct:${RESET}     ${CYAN}https://developer.apple.com/download/applications/${RESET}\n"
+        printf "  ${BOLD}Transfer:${RESET}   ${DIM}scp Xcode*.xip user@host:~/ && xip -x Xcode*.xip && mv Xcode.app /Applications/${RESET}\n\n"
+        printf "  Then: ${CYAN}sudo xcode-select -s /Applications/Xcode.app/Contents/Developer && sudo xcodebuild -license accept${RESET}\n\n"
     fi
-
-    printf "  Re-run this installer after.\n\n"
     exit 1
 fi
 
-if ! command -v swift > /dev/null 2>&1; then
-    printf "${RED}  Swift not found. Xcode may need to finish setup.${RESET}\n"
-    printf "  Try: ${CYAN}sudo xcodebuild -license accept${RESET}\n"; exit 1
-fi
-
-printf "${DIM}  macOS $(sw_vers -productVersion) • $(uname -m) • Swift $(swift --version 2>&1 | head -1 | sed 's/.*version //' | sed 's/ .*//')${RESET}\n"
-printf "${DIM}  Xcode: $XCODE_PATH${RESET}\n"
-printf "${DIM}  Install to: $INSTALL_DIR/engram${RESET}\n\n"
+[ ! command -v swift > /dev/null 2>&1 ] || true
+printf "${DIM}  $(sw_vers -productVersion) • $(uname -m) • Swift $(swift --version 2>&1 | head -1 | sed 's/.*version //' | sed 's/ .*//')${RESET}\n"
 
 # Clone or update
 if [ -d "$BUILD_DIR/.git" ]; then
-    printf "${CYAN}  Updating source...${RESET}\n"
+    printf "${DIM}  Updating source...${RESET}\n"
     git -C "$BUILD_DIR" pull --ff-only --quiet
 else
-    printf "${CYAN}  Cloning source...${RESET}\n"
+    printf "${DIM}  Cloning...${RESET}\n"
     rm -rf "$BUILD_DIR"
     git clone --quiet "$REPO" "$BUILD_DIR"
 fi
 
-printf "${CYAN}  Building release...${RESET}\n"
+printf "${CYAN}  Building...${RESET}\n"
 cd "$BUILD_DIR"
 swift build -c release --quiet
 
-mkdir -p "$INSTALL_DIR"
-cp .build/release/engram "$INSTALL_DIR/engram"
-codesign -s - -f "$INSTALL_DIR/engram" 2>/dev/null || true
-xattr -c "$INSTALL_DIR/engram" 2>/dev/null || true
+printf "${DIM}  Installing to $INSTALL_DIR...${RESET}\n"
+sudo mkdir -p "$INSTALL_DIR"
+sudo cp .build/release/engram "$INSTALL_DIR/engram"
+sudo codesign -s - -f "$INSTALL_DIR/engram" 2>/dev/null || true
+sudo xattr -c "$INSTALL_DIR/engram" 2>/dev/null || true
 
-if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
-    RC="$HOME/.zshrc"
-    [ ! -f "$RC" ] && RC="$HOME/.zprofile"
-    printf '\n# Engram\nexport PATH="$HOME/bin:$PATH"\n' >> "$RC"
-    export PATH="$HOME/bin:$PATH"
+# Build IMCore helper if SIP disabled
+if csrutil status 2>&1 | grep -q "disabled"; then
+    printf "${DIM}  Building iMessage helper...${RESET}\n"
+    sh scripts/build-helper.sh 2>/dev/null
+    mkdir -p "$HOME/.engram"
+    cp .build/release/engram-imcore-helper.dylib "$HOME/.engram/engram-imcore-helper.dylib" 2>/dev/null || true
 fi
-
-"$INSTALL_DIR/engram" memory > /dev/null 2>&1 || true
 
 printf "\n${GREEN}  Installed${RESET}\n\n"
-
-if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
-    printf "  Run this first:  ${CYAN}source ~/.zshrc${RESET}\n\n"
-fi
-
 printf "  ${CYAN}engram login${RESET}    Authenticate\n"
 printf "  ${CYAN}engram${RESET}          Start chatting\n"
 printf "  ${CYAN}engram --help${RESET}   All commands\n\n"
