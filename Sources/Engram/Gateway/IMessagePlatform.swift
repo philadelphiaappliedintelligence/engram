@@ -102,6 +102,40 @@ public actor IMessagePlatform: Platform {
         }
     }
 
+    // MARK: - Send File via AppleScript
+
+    public func sendFile(path: String, caption: String?, to chatId: String) async throws {
+        let phoneEscaped = chatId
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+
+        if let caption, !caption.isEmpty {
+            try await sendMessage(caption, to: chatId)
+        }
+
+        let script = """
+        tell application "Messages"
+            set targetBuddy to "\(phoneEscaped)"
+            set targetService to 1st account whose service type = iMessage
+            set theBuddy to participant targetBuddy of targetService
+            set theFile to POSIX file "\(path)" as alias
+            send theFile to theBuddy
+        end tell
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+
+        if process.terminationStatus != 0 {
+            throw GatewayError.sendFailed("File send osascript exit \(process.terminationStatus)")
+        }
+    }
+
     // MARK: - Typing Indicator
 
     public func sendTyping(to chatId: String) async throws {
