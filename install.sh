@@ -53,14 +53,22 @@ if [[ "$XCODE_PATH" == */CommandLineTools* ]]; then
 
     if [ -d "/Applications/Xcode.app" ]; then
         printf "  Xcode.app is installed but not selected. Fix with:\n"
-        printf "  ${CYAN}  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n\n"
-        printf "  Run that command, then re-run this installer.\n\n"
+        printf "  ${CYAN}  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
+        printf "  ${CYAN}  sudo xcodebuild -license accept${RESET}\n\n"
+        printf "  Then re-run this installer.\n\n"
     else
-        printf "  Install Xcode from the App Store:\n"
+        printf "  Install Xcode:\n\n"
+        printf "  ${BOLD}Option 1:${RESET} App Store\n"
         printf "  ${CYAN}  open \"https://apps.apple.com/app/xcode/id497799835\"${RESET}\n\n"
-        printf "  Or install via xcodesorg:\n"
-        printf "  ${CYAN}  brew install xcodesorg/made/xcodes && xcodes install --latest${RESET}\n\n"
-        printf "  After installing, run: ${CYAN}sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
+        printf "  ${BOLD}Option 2:${RESET} Download .xip from Apple Developer\n"
+        printf "  ${CYAN}  https://developer.apple.com/download/applications/${RESET}\n"
+        printf "  Then: ${DIM}xip -x Xcode*.xip && mv Xcode.app /Applications/${RESET}\n\n"
+        printf "  ${BOLD}Option 3:${RESET} Download on another Mac and transfer\n"
+        printf "  ${DIM}  scp ~/Downloads/Xcode*.xip user@this-mac:~/                ${RESET}\n"
+        printf "  ${DIM}  ssh user@this-mac 'xip -x ~/Xcode*.xip && mv ~/Xcode.app /Applications/'${RESET}\n\n"
+        printf "  After installing, run:\n"
+        printf "  ${CYAN}  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer${RESET}\n"
+        printf "  ${CYAN}  sudo xcodebuild -license accept${RESET}\n\n"
         printf "  Then re-run this installer.\n\n"
     fi
     exit 1
