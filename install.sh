@@ -102,6 +102,11 @@ fi
 "$INSTALL_DIR/engram" memory > /dev/null 2>&1 || true
 
 printf "\n${GREEN}  Installed${RESET}\n\n"
+
+if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
+    printf "  Run this first:  ${CYAN}source ~/.zshrc${RESET}\n\n"
+fi
+
 printf "  ${CYAN}engram login${RESET}    Authenticate\n"
 printf "  ${CYAN}engram${RESET}          Start chatting\n"
 printf "  ${CYAN}engram --help${RESET}   All commands\n\n"
