@@ -306,26 +306,43 @@ public final class OAuthClient: @unchecked Sendable {
         SecItemUpdate(updateQuery as CFDictionary, updateAttrs as CFDictionary)
     }
 
-    // MARK: - Credential Storage (Keychain-backed with JSON file fallback)
+    // MARK: - Credential Storage (file + Keychain)
 
     public func loadCredentials() -> OAuthCredentials? {
-        // Try Keychain first
+        // Try file first (always works, including from launchd/daemon)
+        if let data = try? Data(contentsOf: credFile) {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .secondsSince1970
+            if let creds = try? decoder.decode(OAuthCredentials.self, from: data) {
+                return creds
+            }
+        }
+        // Fallback: Keychain (may block in daemon context, but works in interactive)
         if let creds = keychain.getJSON(KeychainStore.anthropicOAuth, as: OAuthCredentials.self) {
+            // Write to file so daemon can access it next time
+            try? saveToFile(creds)
             return creds
         }
-        // Fallback: read from legacy JSON file and migrate to Keychain
-        guard let data = try? Data(contentsOf: credFile) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
-        guard let creds = try? decoder.decode(OAuthCredentials.self, from: data) else { return nil }
-        // Migrate to Keychain
-        keychain.setJSON(KeychainStore.anthropicOAuth, value: creds)
-        try? FileManager.default.removeItem(at: credFile)
-        return creds
+        return nil
     }
 
     private func saveCredentials(_ creds: OAuthCredentials) throws {
+        // Always write to file (daemon-accessible)
+        try saveToFile(creds)
+        // Also write to Keychain (interactive sessions)
         keychain.setJSON(KeychainStore.anthropicOAuth, value: creds)
+    }
+
+    private func saveToFile(_ creds: OAuthCredentials) throws {
+        try FileManager.default.createDirectory(
+            at: credFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        encoder.dateEncodingStrategy = .secondsSince1970
+        let data = try encoder.encode(creds)
+        try data.write(to: credFile, options: .atomic)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600], ofItemAtPath: credFile.path)
     }
 
     // MARK: - Parse Token Response
