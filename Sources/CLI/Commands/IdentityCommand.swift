@@ -41,18 +41,28 @@ struct IdentityCmd: AsyncParsableCommand {
             let editor = ProcessInfo.processInfo.environment["EDITOR"]
                 ?? ProcessInfo.processInfo.environment["VISUAL"]
                 ?? "vi"
+            let path = tmpFile.path
 
-            // Spawn via /bin/zsh -c to properly inherit the TTY
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-            process.arguments = ["-c", "\(editor) \(tmpFile.path)"]
-            process.standardInput = FileHandle.standardInput
-            process.standardOutput = FileHandle.standardOutput
-            process.standardError = FileHandle.standardError
-            try process.run()
-            process.waitUntilExit()
+            // Run editor synchronously on a real thread (async context kills child TTY processes)
+            let exitCode: Int32 = await withCheckedContinuation { continuation in
+                DispatchQueue.global().sync {
+                    let process = Process()
+                    process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+                    process.arguments = ["-i", "-c", "\(editor) \(path)"]
+                    process.standardInput = FileHandle.standardInput
+                    process.standardOutput = FileHandle.standardOutput
+                    process.standardError = FileHandle.standardError
+                    do {
+                        try process.run()
+                        process.waitUntilExit()
+                        continuation.resume(returning: process.terminationStatus)
+                    } catch {
+                        continuation.resume(returning: 1)
+                    }
+                }
+            }
 
-            guard process.terminationStatus == 0 else {
+            guard exitCode == 0 else {
                 print("Editor exited with error")
                 throw ExitCode.failure
             }
