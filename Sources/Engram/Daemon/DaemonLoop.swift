@@ -30,7 +30,7 @@ public actor DaemonLoop {
         log("Engram daemon starting")
 
         shelf.loadAll()
-        cronStore.load()
+        await cronStore.load()
         await AgentConfig.ensureDefaultIdentities(store: store)
         isRunning = true
 

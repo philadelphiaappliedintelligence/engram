@@ -71,23 +71,13 @@ public final class SessionManager: @unchecked Sendable {
     }
 
     /// Resume the most recent session.
-    public func resumeLatest() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-
+    public func resumeLatest() async -> Bool {
         if let store {
-            // Get latest session from store
-            var latestId: String?
-            let semaphore = DispatchSemaphore(value: 0)
-            Task {
-                latestId = await store.latestSessionId()
-                semaphore.signal()
-            }
-            semaphore.wait()
-
-            guard let id = latestId else { return false }
-            return _loadSessionFromStore(id: id)
+            guard let id = await store.latestSessionId() else { return false }
+            return await _loadSessionFromStore(id: id)
         } else {
+            lock.lock()
+            defer { lock.unlock() }
             guard let latest = listSessionFiles().last else { return false }
             return _loadSessionFromFile(at: latest)
         }
@@ -179,16 +169,9 @@ public final class SessionManager: @unchecked Sendable {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
-    public func listSessions() -> [SessionSummary] {
+    public func listSessions() async -> [SessionSummary] {
         if let store {
-            var results: [(id: String, preview: String?, count: Int, date: Date)] = []
-            let semaphore = DispatchSemaphore(value: 0)
-            Task {
-                results = await store.listSessions()
-                semaphore.signal()
-            }
-            semaphore.wait()
-
+            let results = await store.listSessions()
             return results.map { r in
                 SessionSummary(
                     file: sessionDir.appendingPathComponent(r.id),
@@ -305,17 +288,11 @@ public final class SessionManager: @unchecked Sendable {
         return sessionId
     }
 
-    private func _loadSessionFromStore(id: String) -> Bool {
+    private func _loadSessionFromStore(id: String) async -> Bool {
         currentSessionId = id
         entries = []
 
-        var msgs: [(role: String, content: String, tokensIn: Int?, tokensOut: Int?, timestamp: Date)] = []
-        let semaphore = DispatchSemaphore(value: 0)
-        Task {
-            msgs = await store!.loadMessages(sessionId: id)
-            semaphore.signal()
-        }
-        semaphore.wait()
+        let msgs = await store!.loadMessages(sessionId: id)
 
         for (i, msg) in msgs.enumerated() {
             let entry = SessionEntry(

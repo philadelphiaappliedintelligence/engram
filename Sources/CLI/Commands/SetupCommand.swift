@@ -77,7 +77,7 @@ struct Sessions: AsyncParsableCommand {
         let config = AgentConfig.load()
         let container = try EngramStore.makeContainer()
         let store = EngramStore(modelContainer: container)
-        let sessions = SessionManager(sessionDir: config.sessionURL, store: store).listSessions()
+        let sessions = await SessionManager(sessionDir: config.sessionURL, store: store).listSessions()
         if sessions.isEmpty { print("No saved sessions."); return }
         print("\(bold("Sessions")) (\(sessions.count))\n")
         for (i, s) in sessions.enumerated() {

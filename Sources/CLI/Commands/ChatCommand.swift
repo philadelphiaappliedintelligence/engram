@@ -55,7 +55,7 @@ struct Chat: AsyncParsableCommand {
         let sessionMgr = SessionManager(sessionDir: config.sessionURL, store: store, searchIndex: searchIndex)
         let skillLoader = SkillLoader(); skillLoader.loadAll()
         let cronStore = CronStore(storeDir: AgentConfig.configDir.appendingPathComponent("cron"), store: store)
-        cronStore.load()
+        await cronStore.load()
 
         let registry = ToolRegistry()
         let sessionId = UUID().uuidString
@@ -81,7 +81,7 @@ struct Chat: AsyncParsableCommand {
         }
 
         if resume {
-            if sessionMgr.resumeLatest() {
+            if await sessionMgr.resumeLatest() {
                 print("\(TUI.dim)Resumed: \(sessionMgr.activeSessionId ?? "")\(TUI.reset)")
             } else { sessionMgr.newSession() }
         } else { sessionMgr.newSession() }

@@ -55,7 +55,7 @@ func handleSlashCommand(
         return true
 
     case "sessions":
-        let sessions = session.listSessions()
+        let sessions = await session.listSessions()
         if sessions.isEmpty {
             print("  No saved sessions.")
         } else {

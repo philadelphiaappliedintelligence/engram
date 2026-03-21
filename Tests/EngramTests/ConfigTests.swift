@@ -176,7 +176,7 @@ import Testing
     #expect(entries[1].content == "hi there")
 }
 
-@Test func sessionManagerList() {
+@Test func sessionManagerList() async {
     let tempDir = FileManager.default.temporaryDirectory
         .appendingPathComponent("session_list_\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -188,6 +188,6 @@ import Testing
     mgr.newSession()
     _ = mgr.append(role: "user", content: "second session")
 
-    let sessions = mgr.listSessions()
+    let sessions = await mgr.listSessions()
     #expect(sessions.count == 2)
 }

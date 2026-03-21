@@ -52,7 +52,7 @@ public actor AgentLoop {
     ) async throws -> String {
         // On first turn, inject identity context
         if history.isEmpty && needsPreambleHack {
-            let ctx = ContextBuilder.buildContextBlock(
+            let ctx = await ContextBuilder.buildContextBlock(
                 store: store, shelf: shelf, skillLoader: skillLoader,
                 agentsContext: agentsContext, platformHint: platformHint
             )
@@ -72,7 +72,7 @@ public actor AgentLoop {
         while iterations < config.maxIterations {
             iterations += 1
 
-            let sysPrompt = buildSystemPrompt()
+            let sysPrompt = await buildSystemPrompt()
             let toolDefs = registry.definitions
             let response: LLMResponse
             do {
@@ -152,13 +152,13 @@ public actor AgentLoop {
         config.resolvedProvider == .anthropic
     }
 
-    private func buildSystemPrompt() -> String {
+    private func buildSystemPrompt() async -> String {
         if let cached = cachedSystemPrompt { return cached }
         let prompt: String
         if needsPreambleHack {
             prompt = "You are Claude Code, Anthropic's official CLI for Claude."
         } else {
-            prompt = ContextBuilder.buildContextBlock(
+            prompt = await ContextBuilder.buildContextBlock(
                 shelf: shelf, skillLoader: skillLoader,
                 agentsContext: agentsContext, platformHint: platformHint
             )

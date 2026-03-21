@@ -135,21 +135,17 @@ public final class CronStore: @unchecked Sendable {
         }
     }
 
-    public func load() {
-        lock.lock()
-        defer { lock.unlock() }
-
+    public func load() async {
         if let store {
-            let semaphore = DispatchSemaphore(value: 0)
-            Task {
-                let loaded = await store.loadCronJobs()
-                self.jobs = loaded.map { CronJob(id: $0.id, name: $0.name, schedule: $0.schedule,
-                                                  prompt: $0.prompt, enabled: $0.enabled,
-                                                  lastRun: $0.lastRun, createdAt: $0.createdAt) }
-                semaphore.signal()
-            }
-            semaphore.wait()
+            let loaded = await store.loadCronJobs()
+            lock.lock()
+            self.jobs = loaded.map { CronJob(id: $0.id, name: $0.name, schedule: $0.schedule,
+                                              prompt: $0.prompt, enabled: $0.enabled,
+                                              lastRun: $0.lastRun, createdAt: $0.createdAt) }
+            lock.unlock()
         } else {
+            lock.lock()
+            defer { lock.unlock() }
             guard let data = try? Data(contentsOf: file) else { return }
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601

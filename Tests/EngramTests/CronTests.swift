@@ -87,7 +87,7 @@ import Testing
     #expect(store.allJobs.count == 0)
 }
 
-@Test func cronStorePersistence() throws {
+@Test func cronStorePersistence() async throws {
     let tempDir = FileManager.default.temporaryDirectory
         .appendingPathComponent("cron_persist_\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -97,7 +97,7 @@ import Testing
     store1.save()
 
     let store2 = CronStore(storeDir: tempDir)
-    store2.load()
+    await store2.load()
     #expect(store2.allJobs.count == 1)
     #expect(store2.allJobs[0].name == "persist")
 }

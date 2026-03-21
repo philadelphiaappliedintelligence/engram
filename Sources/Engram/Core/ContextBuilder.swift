@@ -43,7 +43,7 @@ public enum ContextBuilder {
         skillLoader: SkillLoader,
         agentsContext: String = "",
         platformHint: String? = nil
-    ) -> String {
+    ) async -> String {
         var parts: [String] = []
 
         // Identity from store
@@ -57,13 +57,7 @@ public enum ContextBuilder {
 
         if let store {
             for (key, header) in identityParts {
-                var content: String?
-                let semaphore = DispatchSemaphore(value: 0)
-                Task {
-                    content = await store.getIdentity(key)
-                    semaphore.signal()
-                }
-                semaphore.wait()
+                let content = await store.getIdentity(key)
 
                 if let content, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     parts.append("\(header)\n\(content)")
@@ -194,8 +188,8 @@ public enum ContextBuilder {
         skillLoader: SkillLoader,
         agentsContext: String = "",
         platformHint: String? = nil
-    ) -> String {
-        buildContextBlock(store: nil, shelf: shelf, skillLoader: skillLoader,
-                          agentsContext: agentsContext, platformHint: platformHint)
+    ) async -> String {
+        await buildContextBlock(store: nil, shelf: shelf, skillLoader: skillLoader,
+                                agentsContext: agentsContext, platformHint: platformHint)
     }
 }
