@@ -2,7 +2,7 @@ import ArgumentParser
 import Engram
 import Foundation
 
-struct IdentityCmd: AsyncParsableCommand {
+struct IdentityCmd: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "identity",
         abstract: "View or edit identity documents (soul, user, bootstrap)"
@@ -14,9 +14,12 @@ struct IdentityCmd: AsyncParsableCommand {
     @Flag(name: .long, help: "Print content instead of opening editor")
     var show = false
 
-    func run() async throws {
+    func run() throws {
         let container = try EngramStore.makeContainer()
         let store = EngramStore(modelContainer: container)
+
+        // Block on async store access (we need sync for TTY editor)
+        let semaphore = DispatchSemaphore(value: 0)
 
         if let key {
             let validKeys = ["soul", "user", "bootstrap"]
@@ -25,56 +28,58 @@ struct IdentityCmd: AsyncParsableCommand {
                 throw ExitCode.failure
             }
 
-            let current = await store.getIdentity(key) ?? defaultIdentity(for: key)
+            var current = ""
+            Task {
+                current = await store.getIdentity(key) ?? defaultIdentity(for: key)
+                semaphore.signal()
+            }
+            semaphore.wait()
 
-            // Just print if --show
             if show {
                 print(current)
                 return
             }
 
-            // Write to temp file and open in editor
+            // Write to temp file
             let tmpFile = FileManager.default.temporaryDirectory
                 .appendingPathComponent("engram_\(key).md")
             try current.write(to: tmpFile, atomically: true, encoding: .utf8)
 
+            // Open editor — Process with inherited stdio from sync context
             let editor = ProcessInfo.processInfo.environment["EDITOR"]
                 ?? ProcessInfo.processInfo.environment["VISUAL"]
                 ?? "vi"
-            let path = tmpFile.path
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = ["-c", "\(editor) \(tmpFile.path)"]
+            process.standardInput = FileHandle.standardInput
+            process.standardOutput = FileHandle.standardOutput
+            process.standardError = FileHandle.standardError
+            try process.run()
+            process.waitUntilExit()
 
-            // Run editor synchronously on a real thread (async context kills child TTY processes)
-            let exitCode: Int32 = await withCheckedContinuation { continuation in
-                DispatchQueue.global().sync {
-                    let process = Process()
-                    process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-                    process.arguments = ["-i", "-c", "\(editor) \(path)"]
-                    process.standardInput = FileHandle.standardInput
-                    process.standardOutput = FileHandle.standardOutput
-                    process.standardError = FileHandle.standardError
-                    do {
-                        try process.run()
-                        process.waitUntilExit()
-                        continuation.resume(returning: process.terminationStatus)
-                    } catch {
-                        continuation.resume(returning: 1)
-                    }
-                }
-            }
-
-            guard exitCode == 0 else {
+            guard process.terminationStatus == 0 else {
                 print("Editor exited with error")
                 throw ExitCode.failure
             }
 
+            // Save back
             let newContent = try String(contentsOf: tmpFile, encoding: .utf8)
-            await store.setIdentity(key, content: newContent)
+            Task {
+                await store.setIdentity(key, content: newContent)
+                semaphore.signal()
+            }
+            semaphore.wait()
             try? FileManager.default.removeItem(at: tmpFile)
-
             print("Updated \(key) identity.")
         } else {
-            // List all identities
-            let identities = await store.allIdentities()
+            var identities: [(key: String, content: String, updatedAt: Date)] = []
+            Task {
+                identities = await store.allIdentities()
+                semaphore.signal()
+            }
+            semaphore.wait()
+
             if identities.isEmpty {
                 print("No identities stored. Run 'engram identity soul' to create one.")
                 return
@@ -91,14 +96,10 @@ struct IdentityCmd: AsyncParsableCommand {
 
     private func defaultIdentity(for key: String) -> String {
         switch key {
-        case "soul":
-            return "Your name is Engram. Be direct, helpful, no filler."
-        case "user":
-            return ""
-        case "bootstrap":
-            return "Ask the user their name and what to call you."
-        default:
-            return ""
+        case "soul": return "Your name is Engram. Be direct, helpful, no filler."
+        case "user": return ""
+        case "bootstrap": return "Ask the user their name and what to call you."
+        default: return ""
         }
     }
 }
