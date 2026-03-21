@@ -27,8 +27,8 @@ public struct ClipboardTool: Tool {
             guard let content = NSPasteboard.general.string(forType: .string) else {
                 return "(clipboard is empty or contains non-text data)"
             }
-            if content.count > 8000 {
-                return String(content.prefix(8000)) + "\n... (truncated, \(content.count) chars)"
+            if content.count > OutputLimit.terminal {
+                return String(content.prefix(OutputLimit.terminal)) + "\n... (truncated, \(content.count) chars)"
             }
             return content
 

@@ -57,7 +57,7 @@ public struct FileReadTool: Tool {
 
             // Truncate if very large
             if result.count > 16000 {
-                result = String(result.prefix(16000)) + "\n... (truncated)"
+                result = String(result.prefix(OutputLimit.file)) + "\n... (truncated)"
             }
 
             return result
@@ -164,7 +164,4 @@ public struct FileSearchTool: Tool {
         return output.isEmpty ? "(no matches)" : output
     }
 
-    private func shellEscape(_ s: String) -> String {
-        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
 }

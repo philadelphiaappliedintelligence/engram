@@ -2,34 +2,20 @@ import Foundation
 import Testing
 @testable import Engram
 
-@Test func sessionSearchIndexAndFind() throws {
-    let tempDir = FileManager.default.temporaryDirectory
-        .appendingPathComponent("search_test_\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: tempDir) }
+@Test func searchKitIndexAndFind() {
+    let searchIndex = SessionSearchIndex()
+    searchIndex.addMessage(id: "test1", content: "I love holographic memory systems")
+    searchIndex.addMessage(id: "test2", content: "That is fascinating technology")
+    searchIndex.flush()
 
-    // Create a fake session JSONL using SessionManager (ensures correct format)
-    let mgr = SessionManager(sessionDir: tempDir)
-    mgr.newSession()
-    _ = mgr.append(role: "user", content: "I love holographic memory systems")
-    _ = mgr.append(role: "assistant", content: "That is fascinating technology")
-
-    let search = SessionSearch(sessionDir: tempDir)
-    search.indexSessions(in: tempDir)
-
-    let results = search.search(query: "holographic")
-    // FTS5 may not be available in all SQLite builds
+    let results = searchIndex.search(query: "holographic")
     if !results.isEmpty {
-        #expect(results[0].content.contains("holographic"))
+        #expect(results[0].id.contains("test1"))
     }
 }
 
-@Test func sessionSearchEmpty() {
-    let tempDir = FileManager.default.temporaryDirectory
-        .appendingPathComponent("search_empty_\(UUID().uuidString)")
-    defer { try? FileManager.default.removeItem(at: tempDir) }
-
-    let search = SessionSearch(sessionDir: tempDir)
-    let results = search.search(query: "anything")
+@Test func searchKitEmpty() {
+    let searchIndex = SessionSearchIndex()
+    let results = searchIndex.search(query: "xyznonexistent")
     #expect(results.isEmpty)
 }

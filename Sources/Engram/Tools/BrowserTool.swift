@@ -127,8 +127,8 @@ public struct BrowserTool: Tool {
         }
 
         // Truncate long pages
-        if text.count > 12000 {
-            text = String(text.prefix(12000)) + "\n... (truncated)"
+        if text.count > OutputLimit.standard {
+            text = String(text.prefix(OutputLimit.standard)) + "\n... (truncated)"
         }
 
         return header + text

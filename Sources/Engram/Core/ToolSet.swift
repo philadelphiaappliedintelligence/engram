@@ -69,12 +69,8 @@ public enum ToolSet {
             ),
         ]
 
-        // Session search (SearchKit if available, else FTS5 fallback)
-        if let searchIndex {
-            tools.append(SearchKitSessionSearchTool(searchIndex: searchIndex))
-        } else {
-            tools.append(SessionSearchTool(sessionDir: AgentConfig.configDir.appendingPathComponent("sessions")))
-        }
+        // Session search
+        tools.append(SessionSearchTool(searchIndex: searchIndex))
 
         // Identity tools (store-backed)
         if let store {

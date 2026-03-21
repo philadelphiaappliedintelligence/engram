@@ -283,21 +283,3 @@ private func longestCommonSubsequence(_ a: String, _ b: String) -> Int {
     return prev[n]
 }
 
-// MARK: - Thread-Safe Value Wrapper
-
-/// Minimal lock wrapper for Sendable conformance
-public final class LockedValue<T>: @unchecked Sendable {
-    private var value: T
-    private let lock = NSLock()
-
-    public init(_ value: T) {
-        self.value = value
-    }
-
-    @discardableResult
-    public func withLock<R>(_ body: (inout T) -> R) -> R {
-        lock.lock()
-        defer { lock.unlock() }
-        return body(&value)
-    }
-}

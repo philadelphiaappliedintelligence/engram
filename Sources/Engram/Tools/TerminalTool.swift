@@ -49,31 +49,8 @@ public struct TerminalTool: Tool {
             return "{\"error\": \"Failed to launch: \(error.localizedDescription)\"}"
         }
 
-        // Run process with timeout — use atomic flag to prevent double-resume
         let timeoutSeconds = Int(timeout)
-        let completed = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            let resumed = LockedValue(false)
-            DispatchQueue.global().async {
-                process.waitUntilExit()
-                let shouldResume = resumed.withLock { done -> Bool in
-                    if done { return false }
-                    done = true
-                    return true
-                }
-                if shouldResume { continuation.resume(returning: true) }
-            }
-            DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(timeoutSeconds)) {
-                let shouldResume = resumed.withLock { done -> Bool in
-                    if done { return false }
-                    done = true
-                    return true
-                }
-                if shouldResume {
-                    process.terminate()
-                    continuation.resume(returning: false)
-                }
-            }
-        }
+        let completed = await runWithTimeout(process, seconds: timeoutSeconds)
 
         if !completed {
             return "{\"error\": \"Command timed out after \(timeoutSeconds)s\"}"
@@ -87,7 +64,7 @@ public struct TerminalTool: Tool {
         let exitCode = process.terminationStatus
 
         // Truncate long output
-        let maxLen = 8000
+        let maxLen = OutputLimit.terminal
         let truncatedOut = outStr.count > maxLen
             ? String(outStr.prefix(maxLen)) + "\n... (truncated)"
             : outStr

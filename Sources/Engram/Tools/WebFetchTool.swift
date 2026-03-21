@@ -30,7 +30,7 @@ public struct WebFetchTool: Tool {
             return "{\"error\": \"Invalid URL: \(urlStr)\"}"
         }
 
-        let maxLength = Int(input["max_length"]?.numberValue ?? 12000)
+        let maxLength = Int(input["max_length"]?.numberValue ?? Double(OutputLimit.standard))
         let raw = input["raw"]?.boolValue ?? false
 
         var request = URLRequest(url: url)

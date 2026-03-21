@@ -59,19 +59,7 @@ public struct ExecuteCodeTool: Tool {
             return "{\"error\": \"Failed to launch \(language): \(error.localizedDescription)\"}"
         }
 
-        // Timeout
-        let completed = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            let resumed = LockedValue(false)
-            DispatchQueue.global().async {
-                process.waitUntilExit()
-                let should = resumed.withLock { d -> Bool in if d { return false }; d = true; return true }
-                if should { continuation.resume(returning: true) }
-            }
-            DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(timeout)) {
-                let should = resumed.withLock { d -> Bool in if d { return false }; d = true; return true }
-                if should { process.terminate(); continuation.resume(returning: false) }
-            }
-        }
+        let completed = await runWithTimeout(process, seconds: timeout)
 
         if !completed { return "{\"error\": \"Code timed out after \(timeout)s\"}" }
 
@@ -81,7 +69,7 @@ public struct ExecuteCodeTool: Tool {
         let errStr = String(data: errData, encoding: .utf8) ?? ""
         let exitCode = process.terminationStatus
 
-        let maxLen = 12000
+        let maxLen = OutputLimit.standard
         var output = outStr
         if output.count > maxLen { output = String(output.prefix(maxLen)) + "\n... (truncated)" }
 

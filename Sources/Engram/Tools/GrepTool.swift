@@ -88,13 +88,10 @@ public struct GrepTool: Tool {
 
         // Truncate if very long
         if output.count > 12000 {
-            return String(output.prefix(12000)) + "\n... (truncated)"
+            return String(output.prefix(OutputLimit.standard)) + "\n... (truncated)"
         }
 
         return output
     }
 
-    private func shellEscape(_ s: String) -> String {
-        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
 }
