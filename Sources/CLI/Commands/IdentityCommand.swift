@@ -11,6 +11,9 @@ struct IdentityCmd: AsyncParsableCommand {
     @Argument(help: "Identity to edit: soul, user, or bootstrap (omit to list all)")
     var key: String?
 
+    @Flag(name: .long, help: "Print content instead of opening editor")
+    var show = false
+
     func run() async throws {
         let container = try EngramStore.makeContainer()
         let store = EngramStore(modelContainer: container)
@@ -22,16 +25,25 @@ struct IdentityCmd: AsyncParsableCommand {
                 throw ExitCode.failure
             }
 
-            // Get current content
             let current = await store.getIdentity(key) ?? defaultIdentity(for: key)
+
+            // Just print if --show
+            if show {
+                print(current)
+                return
+            }
+
+            // Open in editor
 
             // Write to temp file
             let tmpDir = FileManager.default.temporaryDirectory
             let tmpFile = tmpDir.appendingPathComponent("engram_\(key).md")
             try current.write(to: tmpFile, atomically: true, encoding: .utf8)
 
-            // Open in $EDITOR
-            let editor = ProcessInfo.processInfo.environment["EDITOR"] ?? "nano"
+            // Open in $EDITOR (default: vi, more universally available than nano)
+            let editor = ProcessInfo.processInfo.environment["EDITOR"]
+                ?? ProcessInfo.processInfo.environment["VISUAL"]
+                ?? "vi"
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             process.arguments = [editor, tmpFile.path]
