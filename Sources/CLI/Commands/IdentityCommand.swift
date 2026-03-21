@@ -33,20 +33,19 @@ struct IdentityCmd: AsyncParsableCommand {
                 return
             }
 
-            // Open in editor
-
-            // Write to temp file
-            let tmpDir = FileManager.default.temporaryDirectory
-            let tmpFile = tmpDir.appendingPathComponent("engram_\(key).md")
+            // Write to temp file and open in editor
+            let tmpFile = FileManager.default.temporaryDirectory
+                .appendingPathComponent("engram_\(key).md")
             try current.write(to: tmpFile, atomically: true, encoding: .utf8)
 
-            // Open in $EDITOR (default: vi, more universally available than nano)
             let editor = ProcessInfo.processInfo.environment["EDITOR"]
                 ?? ProcessInfo.processInfo.environment["VISUAL"]
                 ?? "vi"
+
+            // Spawn via /bin/zsh -c to properly inherit the TTY
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = [editor, tmpFile.path]
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = ["-c", "\(editor) \(tmpFile.path)"]
             process.standardInput = FileHandle.standardInput
             process.standardOutput = FileHandle.standardOutput
             process.standardError = FileHandle.standardError
@@ -58,7 +57,6 @@ struct IdentityCmd: AsyncParsableCommand {
                 throw ExitCode.failure
             }
 
-            // Read back and save
             let newContent = try String(contentsOf: tmpFile, encoding: .utf8)
             await store.setIdentity(key, content: newContent)
             try? FileManager.default.removeItem(at: tmpFile)
