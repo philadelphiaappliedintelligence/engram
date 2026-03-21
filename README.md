@@ -64,7 +64,7 @@ engram update            Self-update from GitHub
 ### Slash commands (in chat)
 
 ```
-/memory       View memory across all nuggets
+/memory       View memory across all artifacts
 /skills       List available skills
 /new          Clear history, start fresh session
 /tokens       Show token usage
@@ -84,7 +84,7 @@ recall("favorite color")
 → unbind → cosine match → "black" (0.3ms)
 ```
 
-Facts live in **nuggets** — topic-scoped memories (`preferences`, `project`, `people`). The agent organizes these automatically.
+Facts live in **artifacts** — topic-scoped memories (`preferences`, `project`, `people`). The agent organizes these automatically.
 
 Facts recalled 3+ times **promote** into the system prompt as permanent context. The agent learns what matters by what it reaches for.
 
@@ -174,7 +174,7 @@ CLI / Daemon
   └── AgentLoop (actor)
         ├── LLMClient ──→ Anthropic / OpenAI (streaming, prompt caching)
         ├── ToolRegistry ──→ 28 tools (parallel execution, approval workflow)
-        │     ├── MemoryTools → Shelf → Nuggets (HRR vectors)
+        │     ├── MemoryTools → Shelf → Artifacts (HRR vectors)
         │     ├── IdentityTools → EngramStore (SwiftData)
         │     ├── FileTools, TerminalTool, ExecuteCodeTool
         │     ├── macOS native (Calendar, Contacts, Spotlight, TTS, STT)
