@@ -34,7 +34,7 @@ public actor DaemonLoop {
         await AgentConfig.ensureDefaultIdentities(store: store)
         isRunning = true
 
-        log("Loaded \(shelf.nuggetNames.count) nuggets, \(cronStore.allJobs.count) cron jobs")
+        log("Loaded \(shelf.artifactNames.count) artifacts, \(cronStore.allJobs.count) cron jobs")
 
         writePidFile()
         let sigSources = installSignalHandlers()
@@ -75,7 +75,7 @@ public actor DaemonLoop {
             // Log every 5 minutes
             if tick % 300 == 0 {
                 let mins = tick / 60
-                log("Heartbeat — \(shelf.nuggetNames.count) nuggets, \(totalFacts()) facts, \(platforms.count) platforms, uptime \(mins)m")
+                log("Heartbeat — \(shelf.artifactNames.count) artifacts, \(totalFacts()) facts, \(platforms.count) platforms, uptime \(mins)m")
             }
 
             // Memory consolidation every 6 hours

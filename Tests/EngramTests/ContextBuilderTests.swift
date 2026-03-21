@@ -33,11 +33,11 @@ import Testing
     let dir = FileManager.default.temporaryDirectory
         .appendingPathComponent("ctx_mem_\(UUID().uuidString)")
     let shelf = Shelf(saveDir: dir)
-    shelf.remember(nugget: "test", key: "fact", value: "data")
+    shelf.remember(artifact: "test", key: "fact", value: "data")
 
-    _ = shelf.recall(query: "fact", nugget: "test", sessionId: "s1")
-    _ = shelf.recall(query: "fact", nugget: "test", sessionId: "s2")
-    _ = shelf.recall(query: "fact", nugget: "test", sessionId: "s3")
+    _ = shelf.recall(query: "fact", artifact: "test", sessionId: "s1")
+    _ = shelf.recall(query: "fact", artifact: "test", sessionId: "s2")
+    _ = shelf.recall(query: "fact", artifact: "test", sessionId: "s3")
 
     let loader = SkillLoader(searchDirs: [])
     let block = await ContextBuilder.buildContextBlock(shelf: shelf, skillLoader: loader)

@@ -138,18 +138,18 @@ public final class CronStore: @unchecked Sendable {
     public func load() async {
         if let store {
             let loaded = await store.loadCronJobs()
-            lock.lock()
-            self.jobs = loaded.map { CronJob(id: $0.id, name: $0.name, schedule: $0.schedule,
-                                              prompt: $0.prompt, enabled: $0.enabled,
-                                              lastRun: $0.lastRun, createdAt: $0.createdAt) }
-            lock.unlock()
+            lock.withLock {
+                self.jobs = loaded.map { CronJob(id: $0.id, name: $0.name, schedule: $0.schedule,
+                                                  prompt: $0.prompt, enabled: $0.enabled,
+                                                  lastRun: $0.lastRun, createdAt: $0.createdAt) }
+            }
         } else {
-            lock.lock()
-            defer { lock.unlock() }
-            guard let data = try? Data(contentsOf: file) else { return }
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            jobs = (try? decoder.decode([CronJob].self, from: data)) ?? []
+            lock.withLock {
+                guard let data = try? Data(contentsOf: file) else { return }
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                jobs = (try? decoder.decode([CronJob].self, from: data)) ?? []
+            }
         }
     }
 

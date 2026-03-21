@@ -122,14 +122,14 @@ public enum TUI {
         print("\(cyan)\(bold)  \(text)\(reset) \(dim)\(cyan)\(String(repeating: "━", count: pad))\(reset)")
     }
 
-    public static func banner(model: String, nuggets: Int, facts: Int,
+    public static func banner(model: String, artifacts: Int, facts: Int,
                                promoted: Int, tools: Int, skills: Int,
                                daemon: String) {
         print("")
         header("Engram")
         print("")
         print("  \(dim)Model:\(reset)   \(model)")
-        print("  \(dim)Memory:\(reset)  \(nuggets) nuggets, \(facts) facts (\(promoted) promoted)")
+        print("  \(dim)Memory:\(reset)  \(artifacts) artifacts, \(facts) facts (\(promoted) promoted)")
         print("  \(dim)Tools:\(reset)   \(tools) \(dim)|\(reset) Skills: \(skills) \(dim)|\(reset) Daemon: \(daemon)")
         print("")
         print("  \(dim)Type /help for commands, 'exit' to quit.\(reset)")

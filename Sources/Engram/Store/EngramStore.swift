@@ -70,8 +70,8 @@ import SwiftData
 
     // MARK: - Facts (HRR Memory)
 
-    public func saveFact(nugget: String, key: String, value: String, hits: Int = 0, session: String? = nil) {
-        let predicate = #Predicate<MemoryFact> { $0.nugget == nugget && $0.key == key }
+    public func saveFact(artifact: String, key: String, value: String, hits: Int = 0, session: String? = nil) {
+        let predicate = #Predicate<MemoryFact> { $0.artifact == artifact && $0.key == key }
         let descriptor = FetchDescriptor<MemoryFact>(predicate: predicate)
 
         if let existing = (try? modelContext.fetch(descriptor))?.first {
@@ -79,13 +79,13 @@ import SwiftData
             existing.hits = hits
             existing.lastHitSession = session
         } else {
-            modelContext.insert(MemoryFact(nugget: nugget, key: key, value: value, hits: hits, lastHitSession: session))
+            modelContext.insert(MemoryFact(artifact: artifact, key: key, value: value, hits: hits, lastHitSession: session))
         }
         try? modelContext.save()
     }
 
-    public func loadFacts(nugget: String) -> [(key: String, value: String, hits: Int, session: String?)] {
-        let predicate = #Predicate<MemoryFact> { $0.nugget == nugget }
+    public func loadFacts(artifact: String) -> [(key: String, value: String, hits: Int, session: String?)] {
+        let predicate = #Predicate<MemoryFact> { $0.artifact == artifact }
         let descriptor = FetchDescriptor<MemoryFact>(predicate: predicate)
         guard let results = try? modelContext.fetch(descriptor) else { return [] }
         return results.map { (key: $0.key, value: $0.value, hits: $0.hits, session: $0.lastHitSession) }
@@ -97,15 +97,15 @@ import SwiftData
 
         var grouped: [String: [(key: String, value: String, hits: Int, session: String?)]] = [:]
         for fact in results {
-            grouped[fact.nugget, default: []].append(
+            grouped[fact.artifact, default: []].append(
                 (key: fact.key, value: fact.value, hits: fact.hits, session: fact.lastHitSession)
             )
         }
         return grouped
     }
 
-    public func deleteFact(nugget: String, key: String) -> Bool {
-        let predicate = #Predicate<MemoryFact> { $0.nugget == nugget && $0.key == key }
+    public func deleteFact(artifact: String, key: String) -> Bool {
+        let predicate = #Predicate<MemoryFact> { $0.artifact == artifact && $0.key == key }
         let descriptor = FetchDescriptor<MemoryFact>(predicate: predicate)
         guard let existing = (try? modelContext.fetch(descriptor))?.first else { return false }
         modelContext.delete(existing)
@@ -113,8 +113,8 @@ import SwiftData
         return true
     }
 
-    public func updateHit(nugget: String, key: String, hits: Int, session: String) {
-        let predicate = #Predicate<MemoryFact> { $0.nugget == nugget && $0.key == key }
+    public func updateHit(artifact: String, key: String, hits: Int, session: String) {
+        let predicate = #Predicate<MemoryFact> { $0.artifact == artifact && $0.key == key }
         let descriptor = FetchDescriptor<MemoryFact>(predicate: predicate)
         guard let existing = (try? modelContext.fetch(descriptor))?.first else { return }
         existing.hits = hits

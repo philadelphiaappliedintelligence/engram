@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - PRNG (Mulberry32, matches nuggets TypeScript for compatibility)
+// MARK: - PRNG (Mulberry32, matches artifacts TypeScript for compatibility)
 
 public struct Mulberry32: Sendable {
     private var state: Int32

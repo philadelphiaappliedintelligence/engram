@@ -33,7 +33,7 @@ func printBanner(config: AgentConfig, shelf: Shelf, toolCount: Int, skillCount: 
     let statuses = shelf.status()
     TUI.banner(
         model: config.model,
-        nuggets: statuses.count,
+        artifacts: statuses.count,
         facts: statuses.reduce(0) { $0 + $1.factCount },
         promoted: statuses.reduce(0) { $0 + $1.promotableCount },
         tools: toolCount,

@@ -47,28 +47,28 @@ import SwiftData
     let store = EngramStore(modelContainer: container)
 
     // Save and load facts
-    await store.saveFact(nugget: "prefs", key: "color", value: "blue", hits: 0)
-    await store.saveFact(nugget: "prefs", key: "editor", value: "vim", hits: 1)
-    await store.saveFact(nugget: "people", key: "name", value: "Evan", hits: 5)
+    await store.saveFact(artifact: "prefs", key: "color", value: "blue", hits: 0)
+    await store.saveFact(artifact: "prefs", key: "editor", value: "vim", hits: 1)
+    await store.saveFact(artifact: "people", key: "name", value: "Evan", hits: 5)
 
-    let prefs = await store.loadFacts(nugget: "prefs")
+    let prefs = await store.loadFacts(artifact: "prefs")
     #expect(prefs.count == 2)
 
     let all = await store.loadAllFacts()
-    #expect(all.count == 2) // 2 nuggets
+    #expect(all.count == 2) // 2 artifacts
     #expect(all["prefs"]?.count == 2)
     #expect(all["people"]?.count == 1)
 
     // Delete
-    let deleted = await store.deleteFact(nugget: "prefs", key: "color")
+    let deleted = await store.deleteFact(artifact: "prefs", key: "color")
     #expect(deleted == true)
 
-    let after = await store.loadFacts(nugget: "prefs")
+    let after = await store.loadFacts(artifact: "prefs")
     #expect(after.count == 1)
 
     // Update hit
-    await store.updateHit(nugget: "prefs", key: "editor", hits: 10, session: "s1")
-    let updated = await store.loadFacts(nugget: "prefs")
+    await store.updateHit(artifact: "prefs", key: "editor", hits: 10, session: "s1")
+    let updated = await store.loadFacts(artifact: "prefs")
     #expect(updated.first?.hits == 10)
     #expect(updated.first?.session == "s1")
 }
@@ -121,10 +121,10 @@ import SwiftData
     let container = try makeTestContainer()
     let store = EngramStore(modelContainer: container)
 
-    await store.saveFact(nugget: "prefs", key: "color", value: "blue")
-    await store.saveFact(nugget: "prefs", key: "color", value: "red") // upsert
+    await store.saveFact(artifact: "prefs", key: "color", value: "blue")
+    await store.saveFact(artifact: "prefs", key: "color", value: "red") // upsert
 
-    let facts = await store.loadFacts(nugget: "prefs")
+    let facts = await store.loadFacts(artifact: "prefs")
     #expect(facts.count == 1)
     #expect(facts.first?.value == "red")
 }

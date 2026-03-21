@@ -66,7 +66,7 @@ struct Memory: AsyncParsableCommand {
                 print("  \(fact.key): \(fact.value) [\(fact.hits) hits]\(fact.hits >= 3 ? " *" : "")")
             }
         }
-        print("\nTotal: \(totalFacts) facts, \(statuses.count) nuggets (\(totalPromoted) promoted)")
+        print("\nTotal: \(totalFacts) facts, \(statuses.count) artifacts (\(totalPromoted) promoted)")
     }
 }
 

@@ -30,16 +30,16 @@ import SwiftData
 // MARK: - Memory (HRR Facts)
 
 @Model public final class MemoryFact {
-    public var nugget: String
+    public var artifact: String
     public var key: String
     public var value: String
     public var hits: Int
     public var lastHitSession: String?
 
-    // Uniqueness on (nugget, key) enforced in EngramStore upsert logic
+    // Uniqueness on (artifact, key) enforced in EngramStore upsert logic
 
-    public init(nugget: String, key: String, value: String, hits: Int = 0, lastHitSession: String? = nil) {
-        self.nugget = nugget
+    public init(artifact: String, key: String, value: String, hits: Int = 0, lastHitSession: String? = nil) {
+        self.artifact = artifact
         self.key = key
         self.value = value
         self.hits = hits

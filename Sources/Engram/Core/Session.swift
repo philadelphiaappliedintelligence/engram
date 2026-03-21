@@ -76,10 +76,10 @@ public final class SessionManager: @unchecked Sendable {
             guard let id = await store.latestSessionId() else { return false }
             return await _loadSessionFromStore(id: id)
         } else {
-            lock.lock()
-            defer { lock.unlock() }
-            guard let latest = listSessionFiles().last else { return false }
-            return _loadSessionFromFile(at: latest)
+            return lock.withLock {
+                guard let latest = listSessionFiles().last else { return false }
+                return _loadSessionFromFile(at: latest)
+            }
         }
     }
 

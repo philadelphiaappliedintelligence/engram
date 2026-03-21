@@ -112,7 +112,7 @@ public enum ContextBuilder {
         if !promoted.isEmpty {
             parts.append("## Permanent Memory (frequently recalled)")
             for item in promoted {
-                parts.append("- [\(item.nugget)] \(item.fact.key): \(item.fact.value)")
+                parts.append("- [\(item.artifact)] \(item.fact.key): \(item.fact.value)")
             }
         }
 
@@ -161,7 +161,7 @@ public enum ContextBuilder {
         } else {
             parts.append("""
             ## Tool Guidelines
-            - Use memory_remember to store facts. Organize into topic nuggets (preferences, project, people, etc.)
+            - Use memory_remember to store facts. Organize into topic artifacts (preferences, project, people, etc.)
             - Use memory_recall before answering questions -- check if you already know the answer
             - Use identity_edit to update identity documents (soul, user, bootstrap)
             - Use identity_read to read identity documents

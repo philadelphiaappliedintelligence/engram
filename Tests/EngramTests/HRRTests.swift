@@ -154,86 +154,86 @@ import Testing
     }
 }
 
-// MARK: - Nugget
+// MARK: - Artifact
 
-@Test func nuggetRememberRecall() {
-    let nugget = Nugget(name: "test", dimension: 512)
-    nugget.remember(key: "favorite_color", value: "blue")
-    nugget.remember(key: "name", value: "Evan")
-    nugget.remember(key: "city", value: "Philadelphia")
+@Test func artifactRememberRecall() {
+    let artifact = Artifact(name: "test", dimension: 512)
+    artifact.remember(key: "favorite_color", value: "blue")
+    artifact.remember(key: "name", value: "Evan")
+    artifact.remember(key: "city", value: "Philadelphia")
 
-    #expect(nugget.recall(query: "favorite_color").answer == "blue")
-    #expect(nugget.recall(query: "name").answer == "Evan")
-    #expect(nugget.recall(query: "city").answer == "Philadelphia")
+    #expect(artifact.recall(query: "favorite_color").answer == "blue")
+    #expect(artifact.recall(query: "name").answer == "Evan")
+    #expect(artifact.recall(query: "city").answer == "Philadelphia")
 }
 
-@Test func nuggetForget() {
-    let nugget = Nugget(name: "test", dimension: 512)
-    nugget.remember(key: "temp", value: "data")
-    #expect(nugget.factCount == 1)
-    nugget.forget(key: "temp")
-    #expect(nugget.factCount == 0)
+@Test func artifactForget() {
+    let artifact = Artifact(name: "test", dimension: 512)
+    artifact.remember(key: "temp", value: "data")
+    #expect(artifact.factCount == 1)
+    artifact.forget(key: "temp")
+    #expect(artifact.factCount == 0)
 }
 
-@Test func nuggetForgetCaseInsensitive() {
-    let nugget = Nugget(name: "test", dimension: 512)
-    nugget.remember(key: "Name", value: "Evan")
-    #expect(nugget.forget(key: "name"))
-    #expect(nugget.factCount == 0)
+@Test func artifactForgetCaseInsensitive() {
+    let artifact = Artifact(name: "test", dimension: 512)
+    artifact.remember(key: "Name", value: "Evan")
+    #expect(artifact.forget(key: "name"))
+    #expect(artifact.factCount == 0)
 }
 
-@Test func nuggetOverwrite() {
-    let nugget = Nugget(name: "test", dimension: 512)
-    nugget.remember(key: "color", value: "blue")
-    nugget.remember(key: "color", value: "red")
-    #expect(nugget.factCount == 1)
-    #expect(nugget.recall(query: "color").answer == "red")
+@Test func artifactOverwrite() {
+    let artifact = Artifact(name: "test", dimension: 512)
+    artifact.remember(key: "color", value: "blue")
+    artifact.remember(key: "color", value: "red")
+    #expect(artifact.factCount == 1)
+    #expect(artifact.recall(query: "color").answer == "red")
 }
 
-@Test func nuggetHitTracking() {
-    let nugget = Nugget(name: "test", dimension: 512)
-    nugget.remember(key: "fact", value: "important")
+@Test func artifactHitTracking() {
+    let artifact = Artifact(name: "test", dimension: 512)
+    artifact.remember(key: "fact", value: "important")
 
-    _ = nugget.recall(query: "fact", sessionId: "s1")
-    #expect(nugget.facts[0].hits == 1)
+    _ = artifact.recall(query: "fact", sessionId: "s1")
+    #expect(artifact.facts[0].hits == 1)
 
-    _ = nugget.recall(query: "fact", sessionId: "s1")
-    #expect(nugget.facts[0].hits == 1, "Same session shouldn't double-count")
+    _ = artifact.recall(query: "fact", sessionId: "s1")
+    #expect(artifact.facts[0].hits == 1, "Same session shouldn't double-count")
 
-    _ = nugget.recall(query: "fact", sessionId: "s2")
-    #expect(nugget.facts[0].hits == 2)
+    _ = artifact.recall(query: "fact", sessionId: "s2")
+    #expect(artifact.facts[0].hits == 2)
 }
 
-@Test func nuggetPromotable() {
-    let nugget = Nugget(name: "test", dimension: 512)
-    nugget.remember(key: "fact", value: "data")
+@Test func artifactPromotable() {
+    let artifact = Artifact(name: "test", dimension: 512)
+    artifact.remember(key: "fact", value: "data")
 
-    _ = nugget.recall(query: "fact", sessionId: "s1")
-    _ = nugget.recall(query: "fact", sessionId: "s2")
-    #expect(nugget.promotableFacts.isEmpty)
+    _ = artifact.recall(query: "fact", sessionId: "s1")
+    _ = artifact.recall(query: "fact", sessionId: "s2")
+    #expect(artifact.promotableFacts.isEmpty)
 
-    _ = nugget.recall(query: "fact", sessionId: "s3")
-    #expect(nugget.promotableFacts.count == 1)
+    _ = artifact.recall(query: "fact", sessionId: "s3")
+    #expect(artifact.promotableFacts.count == 1)
 }
 
-@Test func nuggetEmptyRecall() {
-    let nugget = Nugget(name: "empty", dimension: 512)
-    let result = nugget.recall(query: "anything")
+@Test func artifactEmptyRecall() {
+    let artifact = Artifact(name: "empty", dimension: 512)
+    let result = artifact.recall(query: "anything")
     #expect(!result.found)
     #expect(result.answer == nil)
 }
 
-@Test func nuggetPersistence() throws {
-    let nugget = Nugget(name: "persist_test", dimension: 256)
-    nugget.remember(key: "a", value: "1")
-    nugget.remember(key: "b", value: "2")
+@Test func artifactPersistence() throws {
+    let artifact = Artifact(name: "persist_test", dimension: 256)
+    artifact.remember(key: "a", value: "1")
+    artifact.remember(key: "b", value: "2")
 
     let tempFile = FileManager.default.temporaryDirectory
-        .appendingPathComponent("test_nugget_\(UUID().uuidString).json")
+        .appendingPathComponent("test_artifact_\(UUID().uuidString).json")
     defer { try? FileManager.default.removeItem(at: tempFile) }
 
-    try nugget.save(to: tempFile)
-    let loaded = try Nugget.load(from: tempFile)
+    try artifact.save(to: tempFile)
+    let loaded = try Artifact.load(from: tempFile)
 
     #expect(loaded.name == "persist_test")
     #expect(loaded.factCount == 2)
@@ -242,39 +242,39 @@ import Testing
 }
 
 @Test func manyFactsRecall() {
-    let nugget = Nugget(name: "stress", dimension: 1024)
+    let artifact = Artifact(name: "stress", dimension: 1024)
     let facts = [
         ("language", "Swift"), ("framework", "SwiftUI"), ("os", "macOS"),
         ("editor", "Xcode"), ("package_manager", "SPM"), ("testing", "Swift Testing"),
         ("database", "SQLite"), ("networking", "URLSession"), ("ui", "AppKit"),
         ("concurrency", "async/await"),
     ]
-    for (k, v) in facts { nugget.remember(key: k, value: v) }
+    for (k, v) in facts { artifact.remember(key: k, value: v) }
 
     var correct = 0
-    for (k, v) in facts { if nugget.recall(query: k).answer == v { correct += 1 } }
+    for (k, v) in facts { if artifact.recall(query: k).answer == v { correct += 1 } }
     #expect(correct >= 8, "Should correctly recall at least 8/10 facts, got \(correct)")
 }
 
 // MARK: - Shelf
 
-@Test func shelfCrossNuggetRecall() {
+@Test func shelfCrossArtifactRecall() {
     let shelf = Shelf(
         saveDir: FileManager.default.temporaryDirectory
             .appendingPathComponent("test_shelf_\(UUID().uuidString)"),
         dimension: 512
     )
 
-    shelf.remember(nugget: "people", key: "boss", value: "Leo")
-    shelf.remember(nugget: "project", key: "deadline", value: "March 25th")
+    shelf.remember(artifact: "people", key: "boss", value: "Leo")
+    shelf.remember(artifact: "project", key: "deadline", value: "March 25th")
 
-    let r1 = shelf.recall(query: "boss", nugget: "people")
+    let r1 = shelf.recall(query: "boss", artifact: "people")
     #expect(r1.result.found)
     #expect(r1.result.answer == "Leo")
 
     let r2 = shelf.recall(query: "deadline")
     #expect(r2.result.found)
-    #expect(r2.nuggetName == "project")
+    #expect(r2.artifactName == "project")
 }
 
 @Test func shelfStatus() {
@@ -283,9 +283,9 @@ import Testing
             .appendingPathComponent("test_shelf_status_\(UUID().uuidString)"),
         dimension: 512
     )
-    shelf.remember(nugget: "a", key: "k1", value: "v1")
-    shelf.remember(nugget: "a", key: "k2", value: "v2")
-    shelf.remember(nugget: "b", key: "k3", value: "v3")
+    shelf.remember(artifact: "a", key: "k1", value: "v1")
+    shelf.remember(artifact: "a", key: "k2", value: "v2")
+    shelf.remember(artifact: "b", key: "k3", value: "v3")
 
     let statuses = shelf.status()
     #expect(statuses.count == 2)
@@ -299,26 +299,26 @@ import Testing
     defer { try? FileManager.default.removeItem(at: dir) }
 
     let shelf1 = Shelf(saveDir: dir, dimension: 256)
-    shelf1.remember(nugget: "test", key: "key", value: "value")
+    shelf1.remember(artifact: "test", key: "key", value: "value")
     shelf1.saveAll()
 
     let shelf2 = Shelf(saveDir: dir, dimension: 256)
     shelf2.loadAll()
-    #expect(shelf2.nuggetNames.contains("test"))
-    let result = shelf2.recall(query: "key", nugget: "test")
+    #expect(shelf2.artifactNames.contains("test"))
+    let result = shelf2.recall(query: "key", artifact: "test")
     #expect(result.result.found)
 }
 
-@Test func shelfRemoveNugget() {
+@Test func shelfRemoveArtifact() {
     let dir = FileManager.default.temporaryDirectory
         .appendingPathComponent("test_shelf_remove_\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: dir) }
 
     let shelf = Shelf(saveDir: dir)
-    shelf.remember(nugget: "temp", key: "k", value: "v")
-    #expect(shelf.hasNugget(named: "temp"))
-    shelf.removeNugget(named: "temp")
-    #expect(!shelf.hasNugget(named: "temp"))
+    shelf.remember(artifact: "temp", key: "k", value: "v")
+    #expect(shelf.hasArtifact(named: "temp"))
+    shelf.removeArtifact(named: "temp")
+    #expect(!shelf.hasArtifact(named: "temp"))
 }
 
 @Test func shelfPromotedFacts() {
@@ -327,11 +327,11 @@ import Testing
             .appendingPathComponent("test_shelf_promo_\(UUID().uuidString)"),
         dimension: 512
     )
-    shelf.remember(nugget: "test", key: "fact", value: "data")
+    shelf.remember(artifact: "test", key: "fact", value: "data")
 
-    _ = shelf.recall(query: "fact", nugget: "test", sessionId: "s1")
-    _ = shelf.recall(query: "fact", nugget: "test", sessionId: "s2")
-    _ = shelf.recall(query: "fact", nugget: "test", sessionId: "s3")
+    _ = shelf.recall(query: "fact", artifact: "test", sessionId: "s1")
+    _ = shelf.recall(query: "fact", artifact: "test", sessionId: "s2")
+    _ = shelf.recall(query: "fact", artifact: "test", sessionId: "s3")
 
     let promoted = shelf.promotedFacts()
     #expect(promoted.count == 1)

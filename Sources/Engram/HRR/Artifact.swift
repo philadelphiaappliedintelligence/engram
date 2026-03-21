@@ -35,12 +35,12 @@ public struct RecallResult: Sendable {
     }
 }
 
-// MARK: - Nugget
+// MARK: - Artifact
 
 /// A single topic-scoped holographic memory.
 /// Facts are bound as key-value pairs into a superposed complex vector.
 /// Recall is algebraic (sub-millisecond, no API calls, no database).
-public final class Nugget: Sendable {
+public final class Artifact: Sendable {
     public let name: String
     public let dimension: Int
 
@@ -194,27 +194,27 @@ public final class Nugget: Sendable {
 
     // MARK: - Persistence
 
-    private struct NuggetFile: Codable {
+    private struct ArtifactFile: Codable {
         let name: String
         let dimension: Int
         let facts: [Fact]
     }
 
     public func save(to url: URL) throws {
-        let file = NuggetFile(name: name, dimension: dimension, facts: facts)
+        let file = ArtifactFile(name: name, dimension: dimension, facts: facts)
         let data = try JSONEncoder().encode(file)
         try data.write(to: url, options: .atomic)
     }
 
-    public static func load(from url: URL) throws -> Nugget {
+    public static func load(from url: URL) throws -> Artifact {
         let data = try Data(contentsOf: url)
-        let file = try JSONDecoder().decode(NuggetFile.self, from: data)
-        let nugget = Nugget(name: file.name, dimension: file.dimension)
+        let file = try JSONDecoder().decode(ArtifactFile.self, from: data)
+        let artifact = Artifact(name: file.name, dimension: file.dimension)
         for fact in file.facts {
-            nugget._facts.withLock { $0.append(fact) }
+            artifact._facts.withLock { $0.append(fact) }
         }
-        nugget.rebuild()
-        return nugget
+        artifact.rebuild()
+        return artifact
     }
 }
 
