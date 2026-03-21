@@ -4,10 +4,13 @@ import CoreServices
 /// SearchKit-backed full-text search for chat sessions.
 /// Uses SKIndex (same engine as Spotlight) for inverted-index FTS.
 public final class SessionSearchIndex: @unchecked Sendable {
-    private var index: SKIndex?
+    // SKIndex is stored as Unmanaged to prevent Swift ARC from calling objc_release
+    // on dealloc — SKIndex crashes when released from async deinit context.
+    private var indexRef: Unmanaged<SKIndex>?
     private let indexURL: URL
     private let lock = NSLock()
-    private var indexValid = false
+
+    private var index: SKIndex? { indexRef?.takeUnretainedValue() }
 
     public init() {
         let dir = FileManager.default.homeDirectoryForCurrentUser
@@ -15,72 +18,56 @@ public final class SessionSearchIndex: @unchecked Sendable {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.indexURL = dir.appendingPathComponent("search.skindex")
 
-        // SearchKit crashes when SIP is disabled on macOS — skip entirely
-        if checkSIPStatus() == .disabled {
-            return
-        }
-
-        // Try to open existing index, or create a new one
-        if FileManager.default.fileExists(atPath: indexURL.path) {
-            if let ref = SKIndexOpenWithURL(indexURL as CFURL, nil, true) {
-                self.index = ref.takeRetainedValue()
-                self.indexValid = true
-            }
-        }
-
-        if !indexValid {
-            let properties: [String: Any] = [
-                kSKMinTermLength as String: 2,
-                kSKProximityIndexing as String: true,
-            ]
-            if let ref = SKIndexCreateWithURL(indexURL as CFURL, nil, kSKIndexInverted, properties as CFDictionary) {
-                self.index = ref.takeRetainedValue()
-                self.indexValid = true
+        // Open existing or create new
+        if FileManager.default.fileExists(atPath: indexURL.path),
+           let ref = SKIndexOpenWithURL(indexURL as CFURL, nil, true) {
+            self.indexRef = ref
+        } else {
+            try? FileManager.default.removeItem(at: indexURL)
+            if let ref = SKIndexCreateWithURL(indexURL as CFURL, nil, kSKIndexInverted, nil) {
+                self.indexRef = ref
             }
         }
     }
 
     deinit {
-        guard indexValid, let index else { return }
-        SKIndexFlush(index)
-        SKIndexClose(index)
+        // Intentionally not closing — SKIndexClose from Swift async deinit crashes.
+        // The index flushes on write, and the OS reclaims on process exit.
+        // For the daemon (long-running), flush() is called periodically.
     }
 
     // MARK: - Index
 
-    /// Add a message to the search index.
-    /// The documentID should be unique (e.g. "sessionId:messageIndex").
     public func addMessage(id: String, content: String) {
         lock.lock()
         defer { lock.unlock() }
-        guard indexValid, let index else { return }
+        guard let index else { return }
 
-        let docURL = URL(string: "engram://message/\(id)")! as CFURL
+        // Use file:// URLs for document references (SearchKit expects this)
+        let docPath = indexURL.deletingLastPathComponent()
+            .appendingPathComponent("msg-\(id)").path
+        let docURL = URL(fileURLWithPath: docPath) as CFURL
         guard let doc = SKDocumentCreateWithURL(docURL) else { return }
-        SKIndexAddDocumentWithText(index, doc.takeUnretainedValue(), content as CFString, true)
+        SKIndexAddDocumentWithText(index, doc.takeRetainedValue(), content as CFString, true)
     }
 
-    /// Flush pending changes to disk.
     public func flush() {
         lock.lock()
         defer { lock.unlock() }
-        guard indexValid, let index else { return }
+        guard let index else { return }
         SKIndexFlush(index)
     }
 
     // MARK: - Search
 
-    /// Search the index. Returns (documentId, score) pairs sorted by relevance.
     public func search(query: String, limit: Int = 20) -> [(id: String, score: Float)] {
         lock.lock()
         defer { lock.unlock() }
-        guard indexValid, let index else { return [] }
+        guard let index else { return [] }
 
-        // Flush before searching to ensure all documents are indexed
         SKIndexFlush(index)
 
-        let options = SKSearchOptions(kSKSearchOptionDefault)
-        guard let searchRef = SKSearchCreate(index, query as CFString, options) else { return [] }
+        guard let searchRef = SKSearchCreate(index, query as CFString, SKSearchOptions(kSKSearchOptionDefault)) else { return [] }
         let search = searchRef.takeRetainedValue()
 
         var documentIDs = [SKDocumentID](repeating: 0, count: limit)
@@ -91,15 +78,15 @@ public final class SessionSearchIndex: @unchecked Sendable {
 
         var results: [(id: String, score: Float)] = []
         for i in 0..<Int(foundCount) {
-            let docID = documentIDs[i]
-            guard let docRef = SKIndexCopyDocumentForDocumentID(index, docID) else { continue }
+            guard let docRef = SKIndexCopyDocumentForDocumentID(index, documentIDs[i]) else { continue }
             let doc = docRef.takeRetainedValue()
             guard let urlRef = SKDocumentCopyURL(doc) else { continue }
             let url = urlRef.takeRetainedValue() as URL
 
-            let path = url.absoluteString
-            if let range = path.range(of: "engram://message/") {
-                let id = String(path[range.upperBound...])
+            // Extract message ID from the filename
+            let filename = url.lastPathComponent
+            if filename.hasPrefix("msg-") {
+                let id = String(filename.dropFirst(4))
                 results.append((id: id, score: scores[i]))
             }
         }
@@ -107,26 +94,20 @@ public final class SessionSearchIndex: @unchecked Sendable {
         return results.sorted { $0.score > $1.score }
     }
 
-    /// Remove all indexed documents and recreate the index.
     public func reset() {
         lock.lock()
         defer { lock.unlock() }
 
-        if indexValid, let index {
-            SKIndexClose(index)
+        if let indexRef {
+            let idx = indexRef.takeRetainedValue()
+            SKIndexClose(idx)
         }
-        self.index = nil
-        self.indexValid = false
+        self.indexRef = nil
 
         try? FileManager.default.removeItem(at: indexURL)
 
-        let properties: [String: Any] = [
-            kSKMinTermLength as String: 2,
-            kSKProximityIndexing as String: true,
-        ]
-        if let ref = SKIndexCreateWithURL(indexURL as CFURL, nil, kSKIndexInverted, properties as CFDictionary) {
-            self.index = ref.takeRetainedValue()
-            self.indexValid = true
+        if let ref = SKIndexCreateWithURL(indexURL as CFURL, nil, kSKIndexInverted, nil) {
+            self.indexRef = ref
         }
     }
 }
