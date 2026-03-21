@@ -1,21 +1,24 @@
 # Engram
 
-A native macOS AI agent with holographic memory. Written in Swift.
+A native macOS AI agent with holographic memory. Single binary. Zero dependencies.
 
-Engram remembers things the way brains do: not in a database or vector store, but in superposed complex vectors that encode facts as interference patterns. Recall is algebraic and sub-millisecond. 
+14K lines of Swift. Not a wrapper around Python or Node — built on Apple frameworks from the ground up.
 
 ---
 
 | | |
 |---|---|
-| **Holographic memory** | Facts stored as bound key-value pairs in complex vector space. Frequently recalled facts promote into permanent context. |
-| **Native macOS** | Calendar, Contacts, Spotlight, Clipboard, TTS, Safari automation. No Electron. No Docker. Just your Mac. |
-| **Multi-provider** | Anthropic, OpenAI, OpenRouter, Ollama, Groq, Together, Mistral, xAI, DeepSeek, Cerebras. Swap with one command. |
-| **Messaging gateway** | iMessage, Telegram, Discord, Slack, Email, Home Assistant. Same agent, every platform. |
-| **Skills** | Markdown instruction files the agent loads on demand. Create your own or install from GitHub. |
-| **Daemon mode** | Runs as a LaunchAgent. Polls gateways, fires cron jobs, consolidates memory. Survives reboots. |
+| **Holographic memory** | Facts stored as bound key-value pairs in complex vector space ([HRR](https://ieeexplore.ieee.org/document/377968)). Sub-millisecond recall. No embeddings server, no vector DB. |
+| **Apple-native persistence** | SwiftData for structured data, SearchKit for full-text search, Keychain for credentials. Zero raw SQL. |
+| **28 tools** | Memory, files, shell, web, calendar, contacts, vision, browser, TTS, STT, code execution, MCP, skills, cron, delegation. |
+| **Messaging gateway** | iMessage (with typing indicators, read receipts, tapback reactions via IMCore), Telegram, Discord, Slack, Email, Home Assistant. |
+| **Prompt caching** | System prompt cached per session. 2-3s response times on subsequent messages. |
+| **Parallel tool execution** | Multiple tool calls run concurrently via TaskGroup. |
+| **Daemon mode** | LaunchAgent with auto-restart, kqueue-based message detection (250ms latency), memory consolidation. |
 
 ## Install
+
+Requires macOS 14+ and Xcode.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/philadelphiaappliedintelligence/engram/main/install.sh | sh
@@ -27,220 +30,163 @@ Or build manually:
 git clone https://github.com/philadelphiaappliedintelligence/engram.git
 cd engram
 swift build -c release
-cp .build/release/engram /usr/local/bin/
+sudo cp .build/release/engram /usr/local/bin/
 ```
-
-Requires macOS 14+ and Swift 5.9+.
 
 ## Get started
 
 ```sh
-# First run — authenticate and pick a model
-engram setup
-
-# Or set your key directly
-export ANTHROPIC_API_KEY="sk-ant-..."
-engram chat
-
-# One-shot mode
-engram chat "What's on my calendar today?"
-
-# Switch models
-engram model
-
-# OAuth login (uses your Claude Pro/Team subscription)
-engram login
+engram login                     # OAuth (Anthropic or OpenAI)
+engram                           # Start chatting
+engram "What's on my calendar?"  # One-shot mode
+engram model                     # Switch models
 ```
-
-On first conversation, Engram asks your name, learns how you work, and builds context from there. It never announces that it's remembering. It just knows.
 
 ## CLI
 
 ```
-engram chat              Interactive session (default)
-engram chat "prompt"     One-shot — answer and exit
-engram setup             Configure provider, model, API key
+engram                   Interactive chat (default)
+engram "prompt"          One-shot — answer and exit
 engram login             OAuth login (Anthropic or OpenAI)
+engram setup             Configure provider, model, API key
 engram model             Browse and select models
+engram identity          View/edit identity documents
+engram memory            View holographic memory
+engram sessions          List past sessions
 engram skills            Manage skills
 engram gateway           Configure messaging platforms
 engram daemon install    Install as background service
 engram daemon start      Start the daemon
 engram daemon status     Check daemon health
-engram daemon logs       Tail daemon output
+engram update            Self-update from GitHub
 ```
 
 ### Slash commands (in chat)
 
 ```
-/memory       View memory status across all nuggets
+/memory       View memory across all nuggets
 /skills       List available skills
 /new          Clear history, start fresh session
-/tokens       Show token usage for this session
-/cost         Estimate session cost
+/tokens       Show token usage
 /context      Show context window utilization
 /help         Command reference
-/exit         Quit
 ```
 
 ## Memory
 
-Engram uses Holographic Reduced Representations (HRR) — a model from cognitive science originally described by Tony Plate in his 1995 paper *[Holographic Reduced Representations](https://ieeexplore.ieee.org/document/377968)*. Information is encoded by binding key-value pairs into complex vectors and superposing them.
+Holographic Reduced Representations (HRR) — facts encoded as interference patterns in complex vector space. Recall is algebraic and sub-millisecond.
 
 ```
 remember("favorite_color", "black")
-→ keyVec("favorite_color") ⊛ valVec("black") added to memory
+→ keyVec ⊛ valVec added to memory
 
 recall("favorite color")
-→ unbind(memory, keyVec("favorite_color")) → cosine match → "black"
+→ unbind → cosine match → "black" (0.3ms)
 ```
 
-Facts live in **nuggets** — topic-scoped memories like `preferences`, `project`, `people`. The agent creates and organizes these automatically.
+Facts live in **nuggets** — topic-scoped memories (`preferences`, `project`, `people`). The agent organizes these automatically.
 
-Facts recalled 3+ times across sessions **promote** into the system prompt as permanent context. The agent learns what matters by what it reaches for.
+Facts recalled 3+ times **promote** into the system prompt as permanent context. The agent learns what matters by what it reaches for.
 
-All memory is local. Stored as JSON in `~/.engram/memory/`.
+## Data Layer
+
+| Data | Framework |
+|------|-----------|
+| Structured data | SwiftData (`@Model`, `@ModelActor`) |
+| Full-text search | SearchKit (`SKIndex`) |
+| Credentials | Keychain Services + file fallback |
+| Skills | Filesystem (markdown) |
+| MCP | JSON-RPC stdio |
+
+Models: Identity, Config, MemoryFact, ChatSession, ChatMessage, CronJob, Gateway, MCPServer, SkillIndex.
 
 ## Tools
 
 | Category | Tools |
 |---|---|
 | **Memory** | `memory_remember`, `memory_recall`, `memory_forget`, `memory_status` |
+| **Identity** | `identity_read`, `identity_edit` |
 | **Files** | `file_read`, `file_write`, `file_search`, `edit`, `grep` |
-| **Shell** | `terminal`, `execute_code` (Python/JS/Bash sandboxed) |
-| **Web** | `web_fetch`, `web_search` (DuckDuckGo, no API key) |
-| **Vision** | `vision` (image analysis), `browser` (Safari automation + screenshots) |
-| **macOS** | `calendar`, `contacts`, `spotlight`, `clipboard`, `tts` |
+| **Shell** | `terminal`, `execute_code` (Python/Bash) |
+| **Web** | `web_fetch`, `web_search`, `browser` (Safari automation) |
+| **macOS** | `calendar`, `contacts`, `spotlight`, `clipboard` |
+| **Audio** | `tts` (text-to-speech), `transcribe_audio` (Speech.framework STT) |
+| **Vision** | `vision` (image analysis) |
 | **Skills** | `skill_list`, `skill_view`, `skill_create` |
 | **Scheduling** | `cron_create`, `cron_list`, `cron_delete` |
-| **Comms** | `send_message` (gateway platforms), `delegate` (spawn sub-agent) |
-| **Search** | `session_search` (FTS5 across all past conversations) |
-| **Generate** | `image_gen` (DALL-E 3, requires OpenAI key) |
+| **Comms** | `send_message`, `delegate` (sub-agent) |
+| **Search** | `session_search` (SearchKit FTS) |
+| **Generate** | `image_gen` (DALL-E) |
+
+Tool approval: In CLI mode, dangerous tools (`terminal`, `file_write`, `edit`, `execute_code`) prompt for confirmation before executing.
 
 ## Identity
 
-Three files in `~/.engram/` define who the agent is:
+Three identity documents stored in SwiftData, editable via CLI or agent tools:
 
-| File | Purpose |
+| Key | Purpose |
 |---|---|
-| `SOUL.md` | Name, personality, behavior. Updated when the user renames or adjusts the agent. |
-| `USER.md` | What the agent knows about you — name, timezone, preferences, projects. Built over time. |
-| `BOOTSTRAP.md` | First-run instructions. Deleted once the agent knows who it's talking to. |
+| `soul` | Name, personality, behavior |
+| `user` | What the agent knows about you — built over time |
+| `bootstrap` | First-run instructions — deleted once the agent knows you |
 
-These are plain markdown. Edit them directly or let the agent maintain them.
+```sh
+engram identity soul    # Open in $EDITOR
+engram identity         # List all
+```
 
 ## Gateway
 
-Run the agent as a daemon and talk to it from anywhere:
-
 ```sh
-# Configure platforms
-engram gateway
-
-# Install and start the daemon
-engram daemon install
-engram daemon start
+engram gateway           # Configure platforms
+engram daemon install    # Install LaunchAgent
+engram daemon start      # Start background service
 ```
 
-| Platform | Auth | Notes |
-|---|---|---|
-| **iMessage** | None (local) | Reads chat.db, sends via AppleScript. Requires Full Disk Access. |
-| **Telegram** | Bot token | Long-polling. File upload support. |
-| **Discord** | Bot token | WebSocket gateway. Heartbeat + message events. |
-| **Slack** | App token + Bot token | Socket Mode. Channel allowlist. |
-| **Email** | IMAP + SMTP | Polls for unseen messages. curl-based, no dependencies. |
-| **Home Assistant** | API token | REST + persistent notifications. Service calls for automations. |
-
-## Skills
-
-Skills are markdown files with YAML frontmatter. The agent loads them on demand or auto-injects them into every prompt.
-
-```
-~/.engram/skills/
-  my-skill/
-    SKILL.md          ← instructions (required)
-    references/       ← supporting docs
-    templates/        ← output templates
-```
-
-Install from GitHub:
-
-```sh
-engram skills install user/repo
-engram skills install user/repo#subdirectory
-```
-
-The agent can also create skills at runtime — it extends its own capabilities as it works.
-
-## Providers
-
-| Provider | Auth |
+| Platform | Notes |
 |---|---|
-| Anthropic | API key or OAuth |
-| OpenAI | API key or OAuth |
-| OpenRouter | API key |
-| Ollama | None (local) |
-| Groq | API key |
-| Together | API key |
-| Mistral | API key |
-| xAI | API key |
-| DeepSeek | API key |
-| Cerebras | API key |
+| **iMessage** | kqueue file watcher on chat.db (250ms). IMCore bridge for typing/read/tapback (SIP disabled). Allowlist support. |
+| **Telegram** | Long-polling. File upload. |
+| **Discord** | WebSocket gateway. |
+| **Slack** | Socket Mode. |
+| **Email** | IMAP + SMTP. curl-based. |
+| **Home Assistant** | REST API + notifications. |
 
-## Configuration
-
-Everything lives in `~/.engram/`:
-
-```
-~/.engram/
-  config.json         ← model, provider, endpoints, MCP servers
-  .env                ← API keys (0600 permissions)
-  SOUL.md             ← agent identity
-  USER.md             ← user profile
-  BOOTSTRAP.md        ← first-run behavior
-  memory/             ← nugget JSON files
-  sessions/           ← conversation JSONL files
-  skills/             ← installed skills
-  cron/               ← scheduled jobs
-```
-
-## MCP
-
-Engram supports the [Model Context Protocol](https://modelcontextprotocol.io/) for external tool servers:
+### iMessage config
 
 ```json
 {
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
+  "gateway": {
+    "imessage": {
+      "enabled": true,
+      "allowedHandles": ["+15551234567"],
+      "enableIMCore": true
     }
-  }
+  },
+  "gatewayModel": "claude-sonnet-4-6"
 }
 ```
-
-MCP tools are discovered at startup and available alongside built-in tools.
 
 ## Architecture
 
 ```
-CLI ──→ AgentLoop ──→ LLMClient ──→ Anthropic / OpenAI / Codex
-           │
-           ├── ToolRegistry ──→ 30+ built-in tools
-           │                     ├── MemoryTools → Shelf → Nuggets (HRR)
-           │                     ├── FileTools, EditTool, GrepTool
-           │                     ├── TerminalTool, ExecuteCodeTool
-           │                     ├── macOS tools (Calendar, Contacts, etc.)
-           │                     └── MCPToolWrapper → external servers
-           │
-           ├── ContextManager ──→ token tracking, auto-compaction
-           ├── SessionManager ──→ JSONL persistence, tree-based branching
-           ├── SkillLoader ──→ markdown skill discovery
-           └── CronScheduler ──→ tick-based job execution
+CLI / Daemon
+  └── AgentLoop (actor)
+        ├── LLMClient ──→ Anthropic / OpenAI (streaming, prompt caching)
+        ├── ToolRegistry ──→ 28 tools (parallel execution, approval workflow)
+        │     ├── MemoryTools → Shelf → Nuggets (HRR vectors)
+        │     ├── IdentityTools → EngramStore (SwiftData)
+        │     ├── FileTools, TerminalTool, ExecuteCodeTool
+        │     ├── macOS native (Calendar, Contacts, Spotlight, TTS, STT)
+        │     └── MCPToolWrapper → external JSON-RPC servers
+        ├── ContextManager ──→ token tracking, auto-compaction
+        ├── SessionManager ──→ SwiftData + SearchKit FTS
+        └── SkillLoader ──→ markdown skill discovery
 
-Daemon ──→ AgentLoop (shared)
-  ├── Gateway polling (iMessage, Telegram, Discord, Slack, Email, HA)
-  ├── Cron tick (every 60s)
+Daemon (LaunchAgent)
+  ├── Gateway platforms (kqueue watcher for iMessage, polling for others)
+  ├── IMCore bridge (ObjC dylib injection for typing/read/tapback)
+  ├── Cron scheduler (tick-based)
   └── Memory consolidation (every 6h)
 ```
 
